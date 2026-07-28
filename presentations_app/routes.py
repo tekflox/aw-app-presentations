@@ -128,6 +128,19 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         share = store.create_share_token(presentation_id, expires_in)
         return {"success": True, **share}
 
+    @api.get("/presentations/{presentation_id}/share")
+    async def list_shares(presentation_id: str):
+        if not store.get(presentation_id):
+            raise HTTPException(status_code=404, detail="Presentation not found")
+        return store.list_share_tokens(presentation_id)
+
+    @api.delete("/presentations/{presentation_id}/share/{token}")
+    async def revoke_share(presentation_id: str, token: str):
+        ok = store.revoke_share_token(token)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Token not found")
+        return {"success": True, "token": token}
+
     @api.websocket("/ws")
     async def presentation_stream(websocket: WebSocket):
         """Stream presentation create/update/delete events.

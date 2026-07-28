@@ -34,7 +34,11 @@ registration. Concretely:
   `ctx.routes.register(...)` (mounted by the runtime at
   `/api/apps/presentations`). Protocol on the wire is unchanged
   (`presentation_init` / `presentation_update`), so a ported frontend needs
-  no protocol changes, only a URL-base change once wired.
+  no protocol changes, only a URL-base change once wired. Now includes the
+  share-token `GET`/`DELETE` list/revoke endpoints and the `AW_TASK_ID`/
+  `AW_TASK_RUN_ID` env-inherited auto-tags on create — both present in the
+  monolith's `presentation.py`/`presentation_manager.py` but missing from
+  the first port (2026-07-28 parity fix).
 - `presentations_app/plugin.py` — `PresentationsAppPlugin` entrypoint.
 - `ui/src/PresentationNav.jsx`, `ui/src/PresentationWindow.jsx` — ported
   **verbatim** (byte-identical logic) from `aw-frontend/src/components/`,
@@ -46,10 +50,11 @@ registration. Concretely:
   `section: "top"`, `contributes.frontend.mode: "component"`) matching
   where the F6 ADR says this class of app is headed. Validates against
   `schemas/aw-app.schema.json`.
-- Tests: `tests/test_storage_and_routes.py` (4 tests, real `FastAPI
+- Tests: `tests/test_storage_and_routes.py` (6 tests, real `FastAPI
   TestClient` against an in-memory-sqlite fake `ctx.db` — CRUD, HTML-with-
-  share-token, WS init/broadcast) + `tests/validate_manifest.py`. All
-  passing (`.venv/aw/bin/python -m pytest tests/` → `4 passed`).
+  share-token, WS init/broadcast, share list/revoke, env-inherited tags) +
+  `tests/validate_manifest.py`. All passing
+  (`.venv/aw/bin/python -m pytest tests/` → `6 passed`).
 
 ### Blocked — the missing framework piece
 

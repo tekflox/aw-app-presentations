@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 
@@ -55,6 +56,20 @@ def _normalize_tags(tags) -> list[str]:
             continue
         seen.setdefault(s, None)
     return list(seen.keys())
+
+
+def _env_inherited_tags() -> list[str]:
+    """Auto-tags inherited from the process environment, ported verbatim
+    from the monolith's ``PresentationManager.create`` — lets a Tasks UI
+    filter "presentations this task produced" by tag."""
+    tags: list[str] = []
+    tid = os.environ.get("AW_TASK_ID")
+    if tid:
+        tags.append(f"task:{tid}")
+    rid = os.environ.get("AW_TASK_RUN_ID")
+    if rid:
+        tags.append(f"run:{rid}")
+    return tags
 
 
 class Presentation:
@@ -112,7 +127,8 @@ class PresentationStore:
                visible: bool = True, session_id: str | None = None,
                tags: list[str] | None = None, silent: bool = False) -> Presentation:
         cid = presentation_id or f"presentation-{uuid.uuid4().hex[:12]}"
-        p = Presentation(cid, title, html, visible=visible, session_id=session_id, tags=tags)
+        merged_tags = _normalize_tags(list(tags or []) + _env_inherited_tags())
+        p = Presentation(cid, title, html, visible=visible, session_id=session_id, tags=merged_tags)
         self._ctx.db.execute(
             _TABLE,
             "INSERT INTO {table} (id, title, html, visible, session_id, tags, created_at, updated_at) "
@@ -214,6 +230,26 @@ class PresentationStore:
         if m["expires_at"] is not None and m["expires_at"] < time.time():
             return None
         return m["presentation_id"]
+
+    def list_share_tokens(self, presentation_id: str) -> list[dict]:
+        rows = self._ctx.db.execute(
+            _SHARE_TABLE, "SELECT * FROM {table} WHERE presentation_id=:id", {"id": presentation_id}
+        )
+        now = time.time()
+        out = []
+        for row in rows:
+            m = row._mapping
+            if m["expires_at"] is None or m["expires_at"] > now:
+                out.append({"token": m["token"], "presentation_id": m["presentation_id"],
+                            "created_at": m["created_at"], "expires_at": m["expires_at"]})
+        return out
+
+    def revoke_share_token(self, token: str) -> bool:
+        rows = self._ctx.db.execute(_SHARE_TABLE, "SELECT * FROM {table} WHERE token=:token", {"token": token})
+        if not rows:
+            return False
+        self._ctx.db.execute(_SHARE_TABLE, "DELETE FROM {table} WHERE token=:token", {"token": token})
+        return True
 
     # ------------------------------------------------------------------
     # WebSocket broadcast

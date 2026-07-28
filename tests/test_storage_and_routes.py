@@ -114,3 +114,27 @@ def test_websocket_init_and_broadcast(client):
         init = ws.receive_json()
         assert init["type"] == "presentation_init"
         assert init["presentations"] == []
+
+
+def test_list_and_revoke_share(client):
+    pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
+    token = client.post(f"/presentations/{pid}/share", json={}).json()["token"]
+
+    listed = client.get(f"/presentations/{pid}/share").json()
+    assert len(listed) == 1
+    assert listed[0]["token"] == token
+
+    revoked = client.delete(f"/presentations/{pid}/share/{token}").json()
+    assert revoked["success"] is True
+
+    assert client.get(f"/presentations/{pid}/share").json() == []
+    assert client.delete(f"/presentations/{pid}/share/{token}").status_code == 404
+
+
+def test_env_inherited_tags(client, monkeypatch):
+    monkeypatch.setenv("AW_TASK_ID", "task-1")
+    monkeypatch.setenv("AW_TASK_RUN_ID", "run-42")
+    pid = client.post("/presentations", json={"title": "T", "html": "<p>a</p>"}).json()["id"]
+    got = client.get(f"/presentations/{pid}").json()
+    assert "task:task-1" in got["tags"]
+    assert "run:run-42" in got["tags"]
