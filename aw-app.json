@@ -2,49 +2,62 @@
   "manifest_version": 1,
   "id": "presentations",
   "name": "Presentations",
-  "version": "0.1.0",
-  "description": "HTML presentations created by agents (diffs, reports, dashboards) — top-bar gallery nav + a window that renders each presentation. Replaces the monolith's /ws/presentations feature and the aw-frontend static PresentationNav.",
+  "version": "0.2.0",
+  "description": "HTML presentations created by agents (diffs, reports, dashboards) \u2014 top-bar gallery nav + a window that renders each presentation. Replaces the monolith's /ws/presentations feature and the aw-frontend static PresentationNav.",
   "tier": "inprocess",
   "publisher": "TekFlox",
-  "resource_estimate": { "cpu": "low", "memory": "-", "disk": "~10 MB" },
-
+  "resource_estimate": {
+    "cpu": "low",
+    "memory": "-",
+    "disk": "~10 MB"
+  },
   "runtime": {
     "python": ">=3.11",
     "entrypoint": "presentations_app.plugin:PresentationsAppPlugin",
     "pip_requires": []
   },
-
   "permissions": [
     "routes:register",
     "db:own-tables",
     "ui:code",
     "ui:slots:core.nav"
   ],
-
   "contributes": {
-    "routes": [{ "prefix": "/api/apps/presentations" }],
+    "routes": [
+      {
+        "prefix": "/api/apps/presentations"
+      }
+    ],
     "windows": [
-      { "id": "presentations.viewer", "title": "Presentation",
-        "body": { "type": "component" } }
+      {
+        "id": "presentations.viewer",
+        "title": "Presentation",
+        "body": {
+          "type": "component"
+        }
+      }
     ],
     "nav": [
-      { "id": "presentations.nav", "label": "Presentation", "section": "top",
-        "opens": "presentations.viewer" }
+      {
+        "id": "presentations.nav",
+        "label": "Presentation",
+        "section": "top",
+        "opens": "presentations.viewer"
+      }
     ],
     "frontend": {
       "mode": "component",
       "bundle": "ui/dist/presentations-ui.mjs",
-      "slots": ["core.nav"]
+      "slots": [
+        "core.nav"
+      ]
     }
   },
-
   "config_schema": {
     "type": "object",
     "properties": {},
     "required": []
   },
-
   "dependencies": {},
-
   "migrations": {}
 }
