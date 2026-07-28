@@ -6,7 +6,7 @@
   "description": "HTML presentations created by agents (diffs, reports, dashboards) — top-bar gallery nav + a window that renders each presentation. Replaces the monolith's /ws/presentations feature and the aw-frontend static PresentationNav.",
   "tier": "inprocess",
   "publisher": "TekFlox",
-  "resource_estimate": { "cpu": "low", "memory": "low", "disk": "low" },
+  "resource_estimate": { "cpu": "low", "memory": "-", "disk": "~10 MB" },
 
   "runtime": {
     "python": ">=3.11",
