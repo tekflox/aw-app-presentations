@@ -1,37 +1,23 @@
-# aw-app-presentations
+# Presentations
 
-Workspace app for creating, storing, sharing, and viewing HTML presentations
-from Agentic Workspace.
+Presentations lets an AW Workspace create, store, share, and view HTML presentations. It gives users and agents a place to turn reports, dashboards, reviews, and visual explanations into shareable pages.
 
-## Features
+## What It Does
 
-- REST routes for presentation CRUD.
-- WebSocket updates for live viewers.
-- Share-token creation, listing, and revocation.
-- Environment-derived task tags on presentation creation.
-- Frontend source for the presentation nav and viewer window.
+- Stores presentation documents created in the workspace.
+- Shows a gallery in the workspace navigation.
+- Opens presentations in a dedicated viewer window.
+- Supports live updates for viewers.
+- Provides sharing links for presentations that need to be opened outside the workspace.
 
-## Status
+## Why Use It
 
-Backend routes and storage are implemented and covered by tests. The frontend
-source is kept in `ui/src/` for packaging with the workspace UI host.
+Use this app when an agent or user needs to present work visually instead of sending plain text. It is useful for status reports, code-review summaries, comparison tables, diagrams, dashboards, and generated visual documents.
 
-## Layout
+## How To Use It
 
-- `aw-app.json` - manifest for the `presentations` app.
-- `schemas/aw-app.schema.json` - local structural validator.
-- `presentations_app/storage.py` - `PresentationStore`.
-- `presentations_app/routes.py` - FastAPI sub-app with REST and WebSocket
-  routes.
-- `presentations_app/plugin.py` - plugin entrypoint.
-- `ui/src/PresentationNav.jsx` - presentation navigation source.
-- `ui/src/PresentationWindow.jsx` - presentation viewer source.
-- `tests/validate_manifest.py` - manifest validation.
-- `tests/test_storage_and_routes.py` - storage and route coverage.
+Install the app and open Presentations from the workspace navigation. Create or open a presentation from the gallery. When a presentation should be shared, generate a share link and send that URL to the viewer.
 
-## Testing
+## What It Delivers
 
-```bash
-.venv/aw/bin/python tests/validate_manifest.py
-.venv/aw/bin/python -m pytest tests/
-```
+The app gives AW Workspace a presentation surface for richer communication. It makes visual reports and live documents easy to keep, view, and share.
