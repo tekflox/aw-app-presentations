@@ -10,20 +10,15 @@ Ports the monolith's ``/ws/presentations`` + ``/api/presentations/*``
   in this app's own Postgres tables (``app__presentations__*``) instead of
   the monolith's SQLModel session.
 
-Known gap (see repo README + Kanban card comment): the manifest also
-declares ``ui:code`` / ``ui:slots:core.nav`` / ``contributes.frontend`` for
-the top-bar "Presentation" nav + gallery window, matching where the F6 ADR
-(``design:migrate-repos-github-into-aw-app-git``, still *Proposed*) says
-this capability is headed — but the SPA plugin-host wiring
-(``installPluginHost``/``fetchContributions``/``<AppSlot>``) is NOT yet
-called anywhere in ``aw-frontend/src/App.jsx``, so these manifest entries
-are inert until that framework piece ships. Do not remove the monolith's
-static ``PresentationNav.jsx`` until it lands — there is no working
-replacement yet.
+The SPA plugin-host wiring (2026-08-05) now has a real ``ui/src/plugin.jsx``
+consuming this app's ``core.nav`` + ``core.window.body:presentations.viewer``
+contributions — the "inert until aw-frontend wires it" note that used to be
+here is stale; see aw-workspace-ui's App.jsx/BasicWindow.jsx.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -37,6 +32,18 @@ class PresentationsAppPlugin:
     async def activate(self, ctx) -> None:
         self.ctx = ctx
         self.store = PresentationStore(ctx)
+        # F1 hot-loads this app's sub-app via a Mount() into the ALREADY
+        # running process — Starlette's own @api.on_event("startup") (which
+        # storage.py's set_loop() used to rely on being called from) only
+        # fires during the OUTER app's own startup sequence, which already
+        # completed long before this app gets hot-loaded. That handler never
+        # ran, so `store._loop` stayed None forever and every create/update/
+        # delete's _broadcast() silently no-op'd (the `if not self._loop:
+        # return` guard) — real-time WS pushes to already-connected clients
+        # never fired, even though the WS itself connected fine and got its
+        # one-shot presentation_init. activate() runs inside the running
+        # event loop, so grab it directly here instead.
+        self.store.set_loop(asyncio.get_running_loop())
 
         app_dir = os.path.join(
             os.path.dirname(__file__), "..", ".data", "presentation-exports"

@@ -138,3 +138,37 @@ def test_env_inherited_tags(client, monkeypatch):
     got = client.get(f"/presentations/{pid}").json()
     assert "task:task-1" in got["tags"]
     assert "run:run-42" in got["tags"]
+
+
+def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():
+    """Regression (2026-08-05): F1 hot-loads this app's sub-app via a bare
+    Mount() into the already-running process — Starlette's own
+    @api.on_event("startup") (which storage.py's set_loop() used to rely on
+    exclusively) never fires for a hot-mounted app, since the OUTER app's
+    startup sequence already completed before this app gets loaded. That
+    left store._loop permanently None in the real runtime, silently no-op'ing
+    every create/update/delete broadcast to already-connected WS clients —
+    invisible in the other tests here because TestClient's `with` context
+    manager runs a real ASGI lifespan (unlike the real runtime), masking it.
+    plugin.py's activate() now sets the loop directly; assert it does."""
+    import asyncio
+
+    from presentations_app.plugin import PresentationsAppPlugin
+
+    class Ctx:
+        def __init__(self):
+            self.db = FakeDb()
+            self._on_deactivate = None
+
+        def on_deactivate(self, fn):
+            self._on_deactivate = fn
+
+        routes = type("R", (), {"register": staticmethod(lambda subapp: None)})()
+
+    async def run():
+        ctx = Ctx()
+        plugin = PresentationsAppPlugin()
+        await plugin.activate(ctx)
+        assert plugin.store._loop is asyncio.get_running_loop()
+
+    asyncio.run(run())
