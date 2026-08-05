@@ -33,24 +33,18 @@
       {
         "id": "presentations.viewer",
         "title": "Presentation",
+        "icon": "layout",
         "body": {
           "type": "component"
         }
-      }
-    ],
-    "nav": [
-      {
-        "id": "presentations.nav",
-        "label": "Presentation",
-        "section": "top",
-        "opens": "presentations.viewer"
       }
     ],
     "frontend": {
       "mode": "component",
       "bundle": "ui/dist/presentations-ui.mjs",
       "slots": [
-        "core.nav"
+        "core.nav",
+        "core.window.body:presentations.viewer"
       ]
     }
   },
