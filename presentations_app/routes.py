@@ -19,6 +19,7 @@ Differences from the monolith route set:
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -97,11 +98,27 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         try:
             await run_in_threadpool(_render_html_to_png, p.html, output_path, width, height, scale)
         except Exception as exc:
+            unavailable = _playwright_unavailable_reason(exc)
+            if unavailable:
+                # The one dependency this endpoint needs beyond the rest of
+                # the app (see module docstring) isn't installed/usable on
+                # this server — a clearer 501 beats a raw 500 stack trace
+                # for the UI's export button to surface.
+                _log.warning("presentation export unavailable for %s: %s", presentation_id, exc)
+                raise HTTPException(status_code=501, detail=unavailable) from exc
             _log.exception("presentation export failed for %s", presentation_id)
             raise HTTPException(status_code=500, detail=f"render failed: {exc}") from exc
 
-        return {"success": True, "presentation_id": presentation_id, "path": output_path,
-                "title": p.title, "size_bytes": os.path.getsize(output_path)}
+        with open(output_path, "rb") as f:
+            image_bytes = f.read()
+        return {
+            "success": True, "presentation_id": presentation_id, "path": output_path,
+            "title": p.title, "size_bytes": len(image_bytes),
+            # Lets the UI trigger a browser download in one round-trip
+            # instead of a second GET against a server-local path it has
+            # no route to fetch.
+            "data_url": f"data:image/png;base64,{base64.b64encode(image_bytes).decode()}",
+        }
 
     @api.get("/presentations/{presentation_id}/html")
     async def get_presentation_html(presentation_id: str, request: Request,
@@ -208,3 +225,16 @@ def _render_html_to_png(html: str, output_path: str, width: int, height: int, sc
             page.screenshot(path=output_path, full_page=True)
         finally:
             browser.close()
+
+
+def _playwright_unavailable_reason(exc: Exception) -> str | None:
+    """None for an unrelated failure; else a plain-language reason to hand
+    back as a 501 instead of a raw stack trace. Covers the two shapes this
+    actually fails in: the package missing entirely (ModuleNotFoundError)
+    vs. installed but `playwright install chromium` never ran (its own
+    error names the missing executable path)."""
+    if isinstance(exc, ModuleNotFoundError) and "playwright" in str(exc):
+        return "PNG export needs the 'playwright' package, which isn't installed on this server yet."
+    if "Executable doesn't exist" in str(exc) and "playwright install" in str(exc):
+        return "PNG export needs playwright's browser binaries (`playwright install chromium`), not installed on this server yet."
+    return None

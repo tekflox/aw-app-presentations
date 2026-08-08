@@ -91,6 +91,61 @@ def test_update_and_delete(client):
     assert client.get(f"/presentations/{pid}").json()["success"] is False
 
 
+def test_export_returns_501_when_playwright_package_missing(client, monkeypatch):
+    pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
+
+    def _raise(*a, **kw):
+        raise ModuleNotFoundError("No module named 'playwright'")
+    monkeypatch.setattr(routes_mod, "_render_html_to_png", _raise)
+
+    resp = client.post(f"/presentations/{pid}/export", json={})
+    assert resp.status_code == 501
+    assert "playwright' package" in resp.json()["detail"]
+
+
+def test_export_returns_501_when_chromium_binary_missing(client, monkeypatch):
+    pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
+
+    def _raise(*a, **kw):
+        raise RuntimeError(
+            "BrowserType.launch: Executable doesn't exist at /some/path\n"
+            "Please run the following command to download new browsers:\n"
+            "    playwright install"
+        )
+    monkeypatch.setattr(routes_mod, "_render_html_to_png", _raise)
+
+    resp = client.post(f"/presentations/{pid}/export", json={})
+    assert resp.status_code == 501
+    assert "browser binaries" in resp.json()["detail"]
+
+
+def test_export_returns_500_for_unrelated_failures(client, monkeypatch):
+    pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
+
+    def _raise(*a, **kw):
+        raise RuntimeError("disk full")
+    monkeypatch.setattr(routes_mod, "_render_html_to_png", _raise)
+
+    resp = client.post(f"/presentations/{pid}/export", json={})
+    assert resp.status_code == 500
+    assert "disk full" in resp.json()["detail"]
+
+
+def test_export_includes_a_data_url_on_success(client, monkeypatch, tmp_path):
+    pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
+
+    def _fake_render(html, output_path, width, height, scale):
+        with open(output_path, "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\nfakepngbytes")
+    monkeypatch.setattr(routes_mod, "_render_html_to_png", _fake_render)
+
+    resp = client.post(f"/presentations/{pid}/export", json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data_url"].startswith("data:image/png;base64,")
+
+
 def test_get_html_and_share_token(client):
     pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
 

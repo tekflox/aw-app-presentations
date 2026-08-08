@@ -276,6 +276,9 @@ export function register(host) {
     const [shareLink, setShareLink] = useState(null);
     const [shareCopied, setShareCopied] = useState(false);
 
+    const [exportLoading, setExportLoading] = useState(false);
+    const [exportError, setExportError] = useState(null);
+
     const load = useCallback(async () => {
       if (!presentationId) return;
       try {
@@ -311,23 +314,56 @@ export function register(host) {
     // rewrite shim a relative path depends on.
     const htmlUrl = presentationId ? host.app.absoluteApiUrl(`/presentations/${presentationId}/html`) : null;
 
-    const handleExport = useCallback(async () => {
-      if (!iframeRef.current) return;
-      const doc = iframeRef.current.contentDocument;
-      if (!doc || !doc.body) return;
-      try {
-        const dataUrl = await toPng(doc.documentElement, {
-          backgroundColor: '#111318', pixelRatio: 2,
-          width: doc.documentElement.scrollWidth, height: doc.documentElement.scrollHeight,
-        });
-        const link = document.createElement('a');
-        link.download = `${(presentation?.title || 'presentation').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
-        link.href = dataUrl;
-        link.click();
-      } catch (err) {
-        console.error('Export failed:', err);
-      }
+    const downloadDataUrl = useCallback((dataUrl) => {
+      const link = document.createElement('a');
+      link.download = `${(presentation?.title || 'presentation').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
+      link.href = dataUrl;
+      link.click();
     }, [presentation?.title]);
+
+    const handleExport = useCallback(async () => {
+      setExportError(null);
+      setExportLoading(true);
+      try {
+        // Client-side first: instant, no server round-trip, works even if
+        // the server has no playwright/chromium installed. Only fails when
+        // the iframe's content is cross-origin (contentDocument comes back
+        // null/inaccessible) or html-to-image itself chokes on the DOM.
+        const doc = iframeRef.current?.contentDocument;
+        if (doc && doc.body) {
+          const dataUrl = await toPng(doc.documentElement, {
+            backgroundColor: '#111318', pixelRatio: 2,
+            width: doc.documentElement.scrollWidth, height: doc.documentElement.scrollHeight,
+          });
+          downloadDataUrl(dataUrl);
+          return;
+        }
+        throw new Error('presentation content is not accessible from this window (cross-origin iframe)');
+      } catch (clientErr) {
+        console.warn('Client-side export failed, falling back to server render:', clientErr);
+        // Server-side fallback: same PNG, via headless chromium — covers
+        // the cross-origin case above. Needs playwright installed server
+        // side; surfaces that plainly (via the backend's 501) rather than
+        // failing silently like the old console.error-only path did.
+        try {
+          const res = await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${presentationId}/export`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.data_url) {
+            throw new Error(data?.detail || `export failed (${res.status})`);
+          }
+          downloadDataUrl(data.data_url);
+        } catch (serverErr) {
+          console.error('Export failed:', serverErr);
+          setExportError(serverErr.message || 'Export failed');
+        }
+      } finally {
+        setExportLoading(false);
+      }
+    }, [presentationId, downloadDataUrl]);
 
     const commitRename = useCallback(async () => {
       setEditing(false);
@@ -459,8 +495,13 @@ export function register(host) {
                 <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
               </svg>
             </button>
-            <button onClick={handleExport} className="p-1.5 rounded hover:bg-white/10 transition-colors cursor-pointer" title="Export as PNG">
-              <svg className="w-4 h-4 text-[var(--color-text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button
+              onClick={handleExport}
+              disabled={exportLoading}
+              className={`p-1.5 rounded transition-colors ${exportLoading ? 'opacity-50 cursor-wait' : 'hover:bg-white/10 cursor-pointer'}`}
+              title={exportError ? `Export failed: ${exportError}` : 'Export as PNG'}
+            >
+              <svg className={`w-4 h-4 ${exportError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-muted)]'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             </button>

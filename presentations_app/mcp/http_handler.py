@@ -296,7 +296,8 @@ img {{ max-width:100%; max-height:100vh; object-fit:contain; }}
         try:
             await run_in_threadpool(routes_mod._render_html_to_png, p.html, output_path, width, height, scale)
         except Exception as exc:
-            return _err(req_id, f"render failed: {exc}")
+            unavailable = routes_mod._playwright_unavailable_reason(exc)
+            return _err(req_id, unavailable or f"render failed: {exc}")
         size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
         return _ok(req_id, f"Exported presentation {p.id} ({p.title}) to {output_path} ({size} bytes)")
 
