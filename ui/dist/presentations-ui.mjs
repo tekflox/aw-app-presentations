@@ -22,23 +22,23 @@ function $(e) {
     t.push(e[n]);
   return t;
 }
-let _ = null;
+let N = null;
 function oe(e = {}) {
-  return _ || (e.includeStyleProperties ? (_ = e.includeStyleProperties, _) : (_ = $(window.getComputedStyle(document.documentElement)), _));
+  return N || (e.includeStyleProperties ? (N = e.includeStyleProperties, N) : (N = $(window.getComputedStyle(document.documentElement)), N));
 }
-function N(e, t) {
+function W(e, t) {
   const r = (e.ownerDocument.defaultView || window).getComputedStyle(e).getPropertyValue(t);
   return r ? parseFloat(r.replace("px", "")) : 0;
 }
 function Ee(e) {
-  const t = N(e, "border-left-width"), n = N(e, "border-right-width");
+  const t = W(e, "border-left-width"), n = W(e, "border-right-width");
   return e.clientWidth + t + n;
 }
 function Se(e) {
-  const t = N(e, "border-top-width"), n = N(e, "border-bottom-width");
+  const t = W(e, "border-top-width"), n = W(e, "border-bottom-width");
   return e.clientHeight + t + n;
 }
-function se(e, t = {}) {
+function ce(e, t = {}) {
   const n = t.width || Ee(e), r = t.height || Se(e);
   return { width: n, height: r };
 }
@@ -102,13 +102,13 @@ function Y(e, t, n, r) {
   } catch {
     return;
   }
-  const s = document.createElement("style");
-  s.appendChild(Le(o, n, a, r)), t.appendChild(s);
+  const c = document.createElement("style");
+  c.appendChild(Le(o, n, a, r)), t.appendChild(c);
 }
 function Ae(e, t, n) {
   Y(e, t, ":before", n), Y(e, t, ":after", n);
 }
-const ee = "application/font-woff", te = "image/jpeg", Fe = {
+const ee = "application/font-woff", te = "image/jpeg", De = {
   woff: ee,
   woff2: ee,
   ttf: "application/font-truetype",
@@ -121,85 +121,85 @@ const ee = "application/font-woff", te = "image/jpeg", Fe = {
   svg: "image/svg+xml",
   webp: "image/webp"
 };
-function Ue(e) {
+function Fe(e) {
   const t = /\.([^./]*?)$/g.exec(e);
   return t ? t[1] : "";
 }
-function G(e) {
-  const t = Ue(e).toLowerCase();
-  return Fe[t] || "";
+function q(e) {
+  const t = Fe(e).toLowerCase();
+  return De[t] || "";
 }
-function De(e) {
+function Ue(e) {
   return e.split(/,/)[1];
 }
-function z(e) {
+function G(e) {
   return e.search(/^(data:)/) !== -1;
 }
-function _e(e, t) {
+function Ne(e, t) {
   return `data:${t};base64,${e}`;
 }
-async function ce(e, t, n) {
+async function se(e, t, n) {
   const r = await fetch(e, t);
   if (r.status === 404)
     throw new Error(`Resource "${r.url}" not found`);
   const a = await r.blob();
   return new Promise((i, o) => {
-    const s = new FileReader();
-    s.onerror = o, s.onloadend = () => {
+    const c = new FileReader();
+    c.onerror = o, c.onloadend = () => {
       try {
-        i(n({ res: r, result: s.result }));
-      } catch (c) {
-        o(c);
+        i(n({ res: r, result: c.result }));
+      } catch (s) {
+        o(s);
       }
-    }, s.readAsDataURL(a);
+    }, c.readAsDataURL(a);
   });
 }
-const B = {};
-function Ie(e, t, n) {
+const z = {};
+function _e(e, t, n) {
   let r = e.replace(/\?.*/, "");
   return n && (r = e), /ttf|otf|eot|woff2?/i.test(r) && (r = r.replace(/.*\//, "")), t ? `[${t}]${r}` : r;
 }
-async function q(e, t, n) {
-  const r = Ie(e, t, n.includeQueryParams);
-  if (B[r] != null)
-    return B[r];
+async function J(e, t, n) {
+  const r = _e(e, t, n.includeQueryParams);
+  if (z[r] != null)
+    return z[r];
   n.cacheBust && (e += (/\?/.test(e) ? "&" : "?") + (/* @__PURE__ */ new Date()).getTime());
   let a;
   try {
-    const i = await ce(e, n.fetchRequestInit, ({ res: o, result: s }) => (t || (t = o.headers.get("Content-Type") || ""), De(s)));
-    a = _e(i, t);
+    const i = await se(e, n.fetchRequestInit, ({ res: o, result: c }) => (t || (t = o.headers.get("Content-Type") || ""), Ue(c)));
+    a = Ne(i, t);
   } catch (i) {
     a = n.imagePlaceholder || "";
     let o = `Failed to fetch resource: ${e}`;
     i && (o = typeof i == "string" ? i : i.message), o && console.warn(o);
   }
-  return B[r] = a, a;
+  return z[r] = a, a;
 }
-async function Oe(e) {
+async function Ie(e) {
   const t = e.toDataURL();
   return t === "data:," ? e.cloneNode(!1) : H(t);
 }
-async function Ne(e, t) {
+async function Oe(e, t) {
   if (e.currentSrc) {
     const i = document.createElement("canvas"), o = i.getContext("2d");
     i.width = e.clientWidth, i.height = e.clientHeight, o == null || o.drawImage(e, 0, 0, i.width, i.height);
-    const s = i.toDataURL();
-    return H(s);
+    const c = i.toDataURL();
+    return H(c);
   }
-  const n = e.poster, r = G(n), a = await q(n, r, t);
+  const n = e.poster, r = q(n), a = await J(n, r, t);
   return H(a);
 }
-async function He(e, t) {
+async function We(e, t) {
   var n;
   try {
     if (!((n = e == null ? void 0 : e.contentDocument) === null || n === void 0) && n.body)
-      return await W(e.contentDocument.body, t, !0);
+      return await M(e.contentDocument.body, t, !0);
   } catch {
   }
   return e.cloneNode(!1);
 }
-async function We(e, t) {
-  return v(e, HTMLCanvasElement) ? Oe(e) : v(e, HTMLVideoElement) ? Ne(e, t) : v(e, HTMLIFrameElement) ? He(e, t) : e.cloneNode(le(e));
+async function He(e, t) {
+  return v(e, HTMLCanvasElement) ? Ie(e) : v(e, HTMLVideoElement) ? Oe(e, t) : v(e, HTMLIFrameElement) ? We(e, t) : e.cloneNode(le(e));
 }
 const Me = (e) => e.tagName != null && e.tagName.toUpperCase() === "SLOT", le = (e) => e.tagName != null && e.tagName.toUpperCase() === "SVG";
 async function Ve(e, t, n) {
@@ -207,8 +207,8 @@ async function Ve(e, t, n) {
   if (le(t))
     return t;
   let i = [];
-  return Me(e) && e.assignedNodes ? i = $(e.assignedNodes()) : v(e, HTMLIFrameElement) && (!((r = e.contentDocument) === null || r === void 0) && r.body) ? i = $(e.contentDocument.body.childNodes) : i = $(((a = e.shadowRoot) !== null && a !== void 0 ? a : e).childNodes), i.length === 0 || v(e, HTMLVideoElement) || await i.reduce((o, s) => o.then(() => W(s, n)).then((c) => {
-    c && t.appendChild(c);
+  return Me(e) && e.assignedNodes ? i = $(e.assignedNodes()) : v(e, HTMLIFrameElement) && (!((r = e.contentDocument) === null || r === void 0) && r.body) ? i = $(e.contentDocument.body.childNodes) : i = $(((a = e.shadowRoot) !== null && a !== void 0 ? a : e).childNodes), i.length === 0 || v(e, HTMLVideoElement) || await i.reduce((o, c) => o.then(() => M(c, n)).then((s) => {
+    s && t.appendChild(s);
   }), Promise.resolve()), t;
 }
 function je(e, t, n) {
@@ -239,26 +239,26 @@ async function qe(e, t) {
     return e;
   const r = {};
   for (let i = 0; i < n.length; i++) {
-    const s = n[i].getAttribute("xlink:href");
-    if (s) {
-      const c = e.querySelector(s), w = document.querySelector(s);
-      !c && w && !r[s] && (r[s] = await W(w, t, !0));
+    const c = n[i].getAttribute("xlink:href");
+    if (c) {
+      const s = e.querySelector(c), x = document.querySelector(c);
+      !s && x && !r[c] && (r[c] = await M(x, t, !0));
     }
   }
   const a = Object.values(r);
   if (a.length) {
     const i = "http://www.w3.org/1999/xhtml", o = document.createElementNS(i, "svg");
     o.setAttribute("xmlns", i), o.style.position = "absolute", o.style.width = "0", o.style.height = "0", o.style.overflow = "hidden", o.style.display = "none";
-    const s = document.createElementNS(i, "defs");
-    o.appendChild(s);
-    for (let c = 0; c < a.length; c++)
-      s.appendChild(a[c]);
+    const c = document.createElementNS(i, "defs");
+    o.appendChild(c);
+    for (let s = 0; s < a.length; s++)
+      c.appendChild(a[s]);
     e.appendChild(o);
   }
   return e;
 }
-async function W(e, t, n) {
-  return !n && t.filter && !t.filter(e) ? null : Promise.resolve(e).then((r) => We(r, t)).then((r) => Ve(e, r, t)).then((r) => Ge(e, r, t)).then((r) => qe(r, t));
+async function M(e, t, n) {
+  return !n && t.filter && !t.filter(e) ? null : Promise.resolve(e).then((r) => He(r, t)).then((r) => Ve(e, r, t)).then((r) => Ge(e, r, t)).then((r) => qe(r, t));
 }
 const ue = /url\((['"]?)([^'"]+?)\1\)/g, Je = /url\([^)]+\)\s*format\((["']?)([^"']+)\1\)/g, Xe = /src:\s*(?:url\([^)]+\)\s*format\([^)]+\)[,;]\s*)+/g;
 function Ke(e) {
@@ -267,13 +267,13 @@ function Ke(e) {
 }
 function Qe(e) {
   const t = [];
-  return e.replace(ue, (n, r, a) => (t.push(a), n)), t.filter((n) => !z(n));
+  return e.replace(ue, (n, r, a) => (t.push(a), n)), t.filter((n) => !G(n));
 }
 async function Ze(e, t, n, r, a) {
   try {
-    const i = n ? be(t, n) : t, o = G(t);
-    let s;
-    return a || (s = await q(i, o, r)), e.replace(Ke(t), `$1${s}$3`);
+    const i = n ? be(t, n) : t, o = q(t);
+    let c;
+    return a || (c = await J(i, o, r)), e.replace(Ke(t), `$1${c}$3`);
   } catch {
   }
   return e;
@@ -296,9 +296,9 @@ async function fe(e, t, n) {
   if (!de(e))
     return e;
   const r = Ye(e, n);
-  return Qe(r).reduce((i, o) => i.then((s) => Ze(s, o, t, n)), Promise.resolve(r));
+  return Qe(r).reduce((i, o) => i.then((c) => Ze(c, o, t, n)), Promise.resolve(r));
 }
-async function I(e, t, n) {
+async function _(e, t, n) {
   var r;
   const a = (r = t.style) === null || r === void 0 ? void 0 : r.getPropertyValue(e);
   if (a) {
@@ -308,23 +308,23 @@ async function I(e, t, n) {
   return !1;
 }
 async function et(e, t) {
-  await I("background", e, t) || await I("background-image", e, t), await I("mask", e, t) || await I("-webkit-mask", e, t) || await I("mask-image", e, t) || await I("-webkit-mask-image", e, t);
+  await _("background", e, t) || await _("background-image", e, t), await _("mask", e, t) || await _("-webkit-mask", e, t) || await _("mask-image", e, t) || await _("-webkit-mask-image", e, t);
 }
 async function tt(e, t) {
   const n = v(e, HTMLImageElement);
-  if (!(n && !z(e.src)) && !(v(e, SVGImageElement) && !z(e.href.baseVal)))
+  if (!(n && !G(e.src)) && !(v(e, SVGImageElement) && !G(e.href.baseVal)))
     return;
-  const r = n ? e.src : e.href.baseVal, a = await q(r, G(r), t);
+  const r = n ? e.src : e.href.baseVal, a = await J(r, q(r), t);
   await new Promise((i, o) => {
-    e.onload = i, e.onerror = t.onImageErrorHandler ? (...c) => {
+    e.onload = i, e.onerror = t.onImageErrorHandler ? (...s) => {
       try {
-        i(t.onImageErrorHandler(...c));
-      } catch (w) {
-        o(w);
+        i(t.onImageErrorHandler(...s));
+      } catch (x) {
+        o(x);
       }
     } : o;
-    const s = e;
-    s.decode && (s.decode = i), s.loading === "lazy" && (s.loading = "eager"), n ? (e.srcset = "", e.src = a) : e.href.baseVal = a;
+    const c = e;
+    c.decode && (c.decode = i), c.loading === "lazy" && (c.loading = "eager"), n ? (e.srcset = "", e.src = a) : e.href.baseVal = a;
   });
 }
 async function rt(e, t) {
@@ -353,8 +353,8 @@ async function ne(e) {
 async function ae(e, t) {
   let n = e.cssText;
   const r = /url\(["']?([^"')]+)["']?\)/g, i = (n.match(/url\([^)]+\)/g) || []).map(async (o) => {
-    let s = o.replace(r, "$1");
-    return s.startsWith("https://") || (s = new URL(s, e.url).href), ce(s, t.fetchRequestInit, ({ result: c }) => (n = n.replace(o, `url(${c})`), [o, c]));
+    let c = o.replace(r, "$1");
+    return c.startsWith("https://") || (c = new URL(c, e.url).href), se(c, t.fetchRequestInit, ({ result: s }) => (n = n.replace(o, `url(${s})`), [o, s]));
   });
   return Promise.all(i).then(() => n);
 }
@@ -365,22 +365,22 @@ function ie(e) {
   let r = e.replace(n, "");
   const a = new RegExp("((@.*?keyframes [\\s\\S]*?){([\\s\\S]*?}\\s*?)})", "gi");
   for (; ; ) {
-    const c = a.exec(r);
-    if (c === null)
+    const s = a.exec(r);
+    if (s === null)
       break;
-    t.push(c[0]);
+    t.push(s[0]);
   }
   r = r.replace(a, "");
-  const i = /@import[\s\S]*?url\([^)]*\)[\s\S]*?;/gi, o = "((\\s*?(?:\\/\\*[\\s\\S]*?\\*\\/)?\\s*?@media[\\s\\S]*?){([\\s\\S]*?)}\\s*?})|(([\\s\\S]*?){([\\s\\S]*?)})", s = new RegExp(o, "gi");
+  const i = /@import[\s\S]*?url\([^)]*\)[\s\S]*?;/gi, o = "((\\s*?(?:\\/\\*[\\s\\S]*?\\*\\/)?\\s*?@media[\\s\\S]*?){([\\s\\S]*?)}\\s*?})|(([\\s\\S]*?){([\\s\\S]*?)})", c = new RegExp(o, "gi");
   for (; ; ) {
-    let c = i.exec(r);
-    if (c === null) {
-      if (c = s.exec(r), c === null)
+    let s = i.exec(r);
+    if (s === null) {
+      if (s = c.exec(r), s === null)
         break;
-      i.lastIndex = s.lastIndex;
+      i.lastIndex = c.lastIndex;
     } else
-      s.lastIndex = i.lastIndex;
-    t.push(c[0]);
+      c.lastIndex = i.lastIndex;
+    t.push(s[0]);
   }
   return t;
 }
@@ -391,10 +391,10 @@ async function at(e, t) {
       try {
         $(a.cssRules || []).forEach((i, o) => {
           if (i.type === CSSRule.IMPORT_RULE) {
-            let s = o + 1;
-            const c = i.href, w = ne(c).then((p) => ae(p, t)).then((p) => ie(p).forEach((y) => {
+            let c = o + 1;
+            const s = i.href, x = ne(s).then((p) => ae(p, t)).then((p) => ie(p).forEach((y) => {
               try {
-                a.insertRule(y, y.startsWith("@import") ? s += 1 : a.cssRules.length);
+                a.insertRule(y, y.startsWith("@import") ? c += 1 : a.cssRules.length);
               } catch (R) {
                 console.error("Error inserting rule from remote css", {
                   rule: y,
@@ -404,15 +404,15 @@ async function at(e, t) {
             })).catch((p) => {
               console.error("Error loading remote css", p.toString());
             });
-            r.push(w);
+            r.push(x);
           }
         });
       } catch (i) {
-        const o = e.find((s) => s.href == null) || document.styleSheets[0];
-        a.href != null && r.push(ne(a.href).then((s) => ae(s, t)).then((s) => ie(s).forEach((c) => {
-          o.insertRule(c, o.cssRules.length);
-        })).catch((s) => {
-          console.error("Error loading remote stylesheet", s);
+        const o = e.find((c) => c.href == null) || document.styleSheets[0];
+        a.href != null && r.push(ne(a.href).then((c) => ae(c, t)).then((c) => ie(c).forEach((s) => {
+          o.insertRule(s, o.cssRules.length);
+        })).catch((c) => {
+          console.error("Error loading remote stylesheet", c);
         })), console.error("Error inlining remote css file", i);
       }
   }), Promise.all(r).then(() => (e.forEach((a) => {
@@ -438,7 +438,7 @@ async function ot(e, t) {
 function he(e) {
   return e.trim().replace(/["']/g, "");
 }
-function st(e) {
+function ct(e) {
   const t = /* @__PURE__ */ new Set();
   function n(r) {
     (r.style.fontFamily || getComputedStyle(r).fontFamily).split(",").forEach((i) => {
@@ -449,8 +449,8 @@ function st(e) {
   }
   return n(e), t;
 }
-async function ct(e, t) {
-  const n = await ot(e, t), r = st(e);
+async function st(e, t) {
+  const n = await ot(e, t), r = ct(e);
   return (await Promise.all(n.filter((i) => r.has(he(i.style.fontFamily))).map((i) => {
     const o = i.parentStyleSheet ? i.parentStyleSheet.href : null;
     return fe(i.cssText, o, t);
@@ -458,19 +458,19 @@ async function ct(e, t) {
 `);
 }
 async function lt(e, t) {
-  const n = t.fontEmbedCSS != null ? t.fontEmbedCSS : t.skipFonts ? null : await ct(e, t);
+  const n = t.fontEmbedCSS != null ? t.fontEmbedCSS : t.skipFonts ? null : await st(e, t);
   if (n) {
     const r = document.createElement("style"), a = document.createTextNode(n);
     r.appendChild(a), e.firstChild ? e.insertBefore(r, e.firstChild) : e.appendChild(r);
   }
 }
 async function ut(e, t = {}) {
-  const { width: n, height: r } = se(e, t), a = await W(e, t, !0);
+  const { width: n, height: r } = ce(e, t), a = await M(e, t, !0);
   return await lt(a, t), await me(a, t), nt(a, t), await Pe(a, n, r);
 }
 async function dt(e, t = {}) {
-  const { width: n, height: r } = se(e, t), a = await ut(e, t), i = await H(a), o = document.createElement("canvas"), s = o.getContext("2d"), c = t.pixelRatio || ke(), w = t.canvasWidth || n, p = t.canvasHeight || r;
-  return o.width = w * c, o.height = p * c, t.skipAutoScale || Ce(o), o.style.width = `${w}`, o.style.height = `${p}`, t.backgroundColor && (s.fillStyle = t.backgroundColor, s.fillRect(0, 0, o.width, o.height)), s.drawImage(i, 0, 0, o.width, o.height), o;
+  const { width: n, height: r } = ce(e, t), a = await ut(e, t), i = await H(a), o = document.createElement("canvas"), c = o.getContext("2d"), s = t.pixelRatio || ke(), x = t.canvasWidth || n, p = t.canvasHeight || r;
+  return o.width = x * s, o.height = p * s, t.skipAutoScale || Ce(o), o.style.width = `${x}`, o.style.height = `${p}`, t.backgroundColor && (c.fillStyle = t.backgroundColor, c.fillRect(0, 0, o.width, o.height)), c.drawImage(i, 0, 0, o.width, o.height), o;
 }
 async function ft(e, t = {}) {
   return (await dt(e, t)).toDataURL();
@@ -478,28 +478,28 @@ async function ft(e, t = {}) {
 function mt(e) {
   const { useState: t, useRef: n, useCallback: r, useEffect: a } = e.React;
   function i() {
-    const [c, w] = t([]), [p, y] = t(!1), R = n(null), S = r((l, x) => {
+    const [s, x] = t([]), [p, y] = t(!1), R = n(null), S = r((l, w) => {
       var b;
-      (b = window.__awOpenAppWindow) == null || b.call(window, "presentations.viewer", l, x);
+      (b = window.__awOpenAppWindow) == null || b.call(window, "presentations.viewer", l, w);
     }, []);
     a(() => (window.__awOpenPresentation = (l) => {
-      const x = c.find((b) => b.id === l);
-      S(l, x == null ? void 0 : x.title);
+      const w = s.find((b) => b.id === l);
+      S(l, w == null ? void 0 : w.title);
     }, () => {
       delete window.__awOpenPresentation;
-    }), [c, S]), a(() => {
-      let l, x, b = !1;
+    }), [s, S]), a(() => {
+      let l, w, b = !1;
       const C = () => {
         try {
-          l = new WebSocket(e.app.wsUrl("/ws")), l.onmessage = (F) => {
+          l = new WebSocket(e.app.wsUrl("/ws")), l.onmessage = (D) => {
             let g;
             try {
-              g = JSON.parse(F.data);
+              g = JSON.parse(D.data);
             } catch {
               return;
             }
             if (g.type === "presentation_init") {
-              w(g.presentations || []);
+              x(g.presentations || []);
               return;
             }
             if (g.type === "presentation_update") {
@@ -507,10 +507,10 @@ function mt(e) {
                 window.dispatchEvent(new CustomEvent("aw-presentation-update", { detail: g }));
               } catch {
               }
-              g.action === "create" ? (w((A) => [...A.filter((T) => T.id !== g.presentation.id), g.presentation]), g.presentation.visible !== !1 && !g.silent && S(g.presentation.id, g.presentation.title)) : g.action === "update" ? w((A) => A.map((T) => T.id === g.presentation.id ? g.presentation : T)) : g.action === "delete" && w((A) => A.filter((T) => T.id !== g.id));
+              g.action === "create" ? (x((A) => [...A.filter((T) => T.id !== g.presentation.id), g.presentation]), g.presentation.visible !== !1 && !g.silent && S(g.presentation.id, g.presentation.title)) : g.action === "update" ? x((A) => A.map((T) => T.id === g.presentation.id ? g.presentation : T)) : g.action === "delete" && x((A) => A.filter((T) => T.id !== g.id));
             }
           }, l.onclose = () => {
-            b || (x = setTimeout(C, 5e3));
+            b || (w = setTimeout(C, 5e3));
           }, l.onerror = () => {
             try {
               l.close();
@@ -518,11 +518,11 @@ function mt(e) {
             }
           };
         } catch {
-          b || (x = setTimeout(C, 5e3));
+          b || (w = setTimeout(C, 5e3));
         }
       };
       return C(), () => {
-        if (b = !0, clearTimeout(x), l) {
+        if (b = !0, clearTimeout(w), l) {
           l.onclose = null;
           try {
             l.close();
@@ -539,7 +539,7 @@ function mt(e) {
     a(() => () => clearTimeout(R.current), []);
     const d = r(async (l) => {
       await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${l}`), { method: "DELETE" });
-    }, []), k = [...c].sort((l, x) => (x.created_at || 0) - (l.created_at || 0));
+    }, []), k = [...s].sort((l, w) => (w.created_at || 0) - (l.created_at || 0));
     return /* @__PURE__ */ e.h("div", { className: "relative", onMouseEnter: m, onMouseLeave: L }, /* @__PURE__ */ e.h(
       "button",
       {
@@ -574,26 +574,26 @@ function mt(e) {
       ))
     ));
   }
-  function o({ presentation: c, onClick: w, onDelete: p }) {
+  function o({ presentation: s, onClick: x, onDelete: p }) {
     const y = n(null), [R, S] = t(0.16), m = 1e3, L = 650, d = L / m;
     a(() => {
       const l = y.current;
       if (!l || typeof ResizeObserver > "u") return;
-      const x = new ResizeObserver((b) => {
+      const w = new ResizeObserver((b) => {
         for (const C of b) {
-          const F = C.contentRect.width;
-          F > 0 && S(F / m);
+          const D = C.contentRect.width;
+          D > 0 && S(D / m);
         }
       });
-      return x.observe(l), () => x.disconnect();
+      return w.observe(l), () => w.disconnect();
     }, []);
-    const k = c.created_at ? new Date(c.created_at * 1e3).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    const k = s.created_at ? new Date(s.created_at * 1e3).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
     return /* @__PURE__ */ e.h(
       "div",
       {
-        onClick: w,
+        onClick: x,
         className: "group relative rounded-md border border-[var(--color-border)] bg-[var(--color-bg-primary)] overflow-hidden cursor-pointer hover:border-[var(--color-accent)] transition-colors",
-        title: c.title
+        title: s.title
       },
       /* @__PURE__ */ e.h(
         "div",
@@ -605,7 +605,7 @@ function mt(e) {
         /* @__PURE__ */ e.h(
           "iframe",
           {
-            src: e.app.absoluteApiUrl(`/presentations/${c.id}/html`),
+            src: e.app.absoluteApiUrl(`/presentations/${s.id}/html`),
             sandbox: "allow-same-origin",
             tabIndex: -1,
             "aria-hidden": !0,
@@ -623,7 +623,7 @@ function mt(e) {
           }
         )
       ),
-      /* @__PURE__ */ e.h("div", { className: "px-2 py-1.5 border-t border-[var(--color-border)]" }, /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] truncate" }, c.title || "Untitled"), Array.isArray(c.tags) && c.tags.length > 0 && /* @__PURE__ */ e.h("div", { className: "flex flex-wrap gap-0.5 mt-0.5 overflow-hidden", style: { maxHeight: 18 } }, c.tags.slice(0, 4).map((l) => /* @__PURE__ */ e.h(
+      /* @__PURE__ */ e.h("div", { className: "px-2 py-1.5 border-t border-[var(--color-border)]" }, /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] truncate" }, s.title || "Untitled"), Array.isArray(s.tags) && s.tags.length > 0 && /* @__PURE__ */ e.h("div", { className: "flex flex-wrap gap-0.5 mt-0.5 overflow-hidden", style: { maxHeight: 18 } }, s.tags.slice(0, 4).map((l) => /* @__PURE__ */ e.h(
         "span",
         {
           key: l,
@@ -631,14 +631,14 @@ function mt(e) {
           title: l
         },
         l
-      )), c.tags.length > 4 && /* @__PURE__ */ e.h(
+      )), s.tags.length > 4 && /* @__PURE__ */ e.h(
         "span",
         {
           className: "text-[8px] leading-none px-1 py-[2px] text-[var(--color-text-muted)]",
-          title: c.tags.slice(4).join(", ")
+          title: s.tags.slice(4).join(", ")
         },
         "+",
-        c.tags.length - 4
+        s.tags.length - 4
       )), k && /* @__PURE__ */ e.h("div", { className: "text-[9px] text-[var(--color-text-muted)] truncate mt-0.5" }, k)),
       /* @__PURE__ */ e.h(
         "button",
@@ -653,8 +653,8 @@ function mt(e) {
       )
     );
   }
-  function s({ windowKey: c, instanceId: w, onClose: p, onMaximize: y, isMaximized: R, onTitleChange: S }) {
-    const m = w, L = n(null), [d, k] = t(null), [l, x] = t(!1), [b, C] = t(""), [F, g] = t(!1), [A, T] = t(!1), [U, O] = t(null), [pe, M] = t(!1), [J, X] = t(!1), [V, K] = t(null), Q = r(async () => {
+  function c({ windowKey: s, instanceId: x, onClose: p, onMaximize: y, isMaximized: R, onTitleChange: S }) {
+    const m = x, L = n(null), [d, k] = t(null), [l, w] = t(!1), [b, C] = t(""), [D, g] = t(!1), [A, T] = t(!1), [F, O] = t(null), [pe, V] = t(!1), [X, K] = t(!1), [I, j] = t(null), Q = r(async () => {
       if (m)
         try {
           const f = await (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${m}`))).json();
@@ -673,12 +673,12 @@ function mt(e) {
       };
       return window.addEventListener("aw-presentation-update", u), () => window.removeEventListener("aw-presentation-update", u);
     }, [m, p, l]);
-    const D = m ? e.app.absoluteApiUrl(`/presentations/${m}/html`) : null, j = r((u) => {
+    const U = m ? e.app.absoluteApiUrl(`/presentations/${m}/html`) : null, B = r((u) => {
       const f = document.createElement("a");
       f.download = `${((d == null ? void 0 : d.title) || "presentation").replace(/[^a-zA-Z0-9_-]/g, "_")}.png`, f.href = u, f.click();
     }, [d == null ? void 0 : d.title]), ge = r(async () => {
       var u;
-      K(null), X(!0);
+      j(null), K(!0);
       try {
         const f = (u = L.current) == null ? void 0 : u.contentDocument;
         if (f && f.body) {
@@ -688,7 +688,7 @@ function mt(e) {
             width: f.documentElement.scrollWidth,
             height: f.documentElement.scrollHeight
           });
-          j(h);
+          B(h);
           return;
         }
         throw new Error("presentation content is not accessible from this window (cross-origin iframe)");
@@ -702,22 +702,22 @@ function mt(e) {
           }), P = await h.json().catch(() => null);
           if (!h.ok || !(P != null && P.data_url))
             throw new Error((P == null ? void 0 : P.detail) || `export failed (${h.status})`);
-          j(P.data_url);
+          B(P.data_url);
         } catch (h) {
-          console.error("Export failed:", h), K(h.message || "Export failed");
+          console.error("Export failed:", h), j(h.message || "Export failed");
         }
       } finally {
-        X(!1);
+        K(!1);
       }
-    }, [m, j]), Z = r(async () => {
-      x(!1);
+    }, [m, B]), Z = r(async () => {
+      w(!1);
       const u = b.trim();
       !u || u === (d == null ? void 0 : d.title) || (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${m}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: u })
       }), k((f) => f && { ...f, title: u }), S == null || S(u));
-    }, [b, d == null ? void 0 : d.title, m, S]), we = r(async (u) => {
+    }, [b, d == null ? void 0 : d.title, m, S]), xe = r(async (u) => {
       if (m) {
         T(!0), O(null);
         try {
@@ -726,20 +726,20 @@ function mt(e) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ expires_in: u })
           })).json();
-          h.success && h.token && O(`${D}?token=${h.token}`);
+          h.success && h.token && O(`${U}?token=${h.token}`);
         } catch (f) {
           console.error("Share failed:", f);
         } finally {
           T(!1);
         }
       }
-    }, [m, D]), xe = r(() => {
+    }, [m, U]), we = r(() => {
       var u;
-      U && ((u = navigator.clipboard) == null || u.writeText(U).then(() => {
-        M(!0), setTimeout(() => M(!1), 2e3);
+      F && ((u = navigator.clipboard) == null || u.writeText(F).then(() => {
+        V(!0), setTimeout(() => V(!1), 2e3);
       }).catch(() => {
       }));
-    }, [U]), ye = r(async () => {
+    }, [F]), ye = r(async () => {
       await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${m}`), { method: "DELETE" }), p == null || p();
     }, [m, p]);
     return /* @__PURE__ */ e.h("div", { className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)] shrink-0", onMouseDown: (u) => u.stopPropagation() }, /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 min-w-0" }, l ? /* @__PURE__ */ e.h(
@@ -750,7 +750,7 @@ function mt(e) {
         onChange: (u) => C(u.target.value),
         onBlur: Z,
         onKeyDown: (u) => {
-          u.key === "Enter" && Z(), u.key === "Escape" && (x(!1), C((d == null ? void 0 : d.title) || ""));
+          u.key === "Enter" && Z(), u.key === "Escape" && (w(!1), C((d == null ? void 0 : d.title) || ""));
         },
         className: "font-semibold text-[13px] text-[var(--color-text-primary)] bg-[var(--color-bg-primary)] border border-[var(--color-accent)] rounded px-1 py-0 outline-none w-48"
       }
@@ -759,7 +759,7 @@ function mt(e) {
       {
         className: "text-[13px] text-[var(--color-text-primary)] truncate cursor-text",
         onDoubleClick: () => {
-          x(!0), C((d == null ? void 0 : d.title) || "");
+          w(!0), C((d == null ? void 0 : d.title) || "");
         },
         title: "Double-click to rename"
       },
@@ -768,24 +768,24 @@ function mt(e) {
       "button",
       {
         onClick: () => {
-          g((u) => !u), O(null), M(!1);
+          g((u) => !u), O(null), V(!1);
         },
         className: "p-1.5 rounded hover:bg-white/10 transition-colors",
         title: "Share presentation"
       },
       /* @__PURE__ */ e.h("svg", { className: "w-4 h-4 text-[var(--color-text-muted)]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("circle", { cx: "18", cy: "5", r: "3" }), /* @__PURE__ */ e.h("circle", { cx: "6", cy: "12", r: "3" }), /* @__PURE__ */ e.h("circle", { cx: "18", cy: "19", r: "3" }), /* @__PURE__ */ e.h("path", { d: "M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" }))
-    ), F && /* @__PURE__ */ e.h(
+    ), D && /* @__PURE__ */ e.h(
       "div",
       {
         className: "absolute right-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3",
         style: { minWidth: 260 }
       },
       /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] mb-2" }, "Share presentation"),
-      A ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : U ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: U }, U), /* @__PURE__ */ e.h("button", { onClick: xe, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, pe ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => O(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: u, value: f }) => /* @__PURE__ */ e.h(
+      A ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : F ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: F }, F), /* @__PURE__ */ e.h("button", { onClick: we, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, pe ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => O(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: u, value: f }) => /* @__PURE__ */ e.h(
         "button",
         {
           key: u,
-          onClick: () => we(f),
+          onClick: () => xe(f),
           className: "text-left text-[11px] px-3 py-1.5 rounded bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
         },
         u
@@ -794,24 +794,45 @@ function mt(e) {
       "button",
       {
         onClick: () => {
-          D && window.open(D, `presentation-${m}`, "popup=1,width=1000,height=700");
+          U && window.open(U, `presentation-${m}`, "popup=1,width=1000,height=700");
         },
         className: "p-1.5 rounded hover:bg-white/10 transition-colors",
         title: "Pop out to new window"
       },
       /* @__PURE__ */ e.h("svg", { className: "w-4 h-4 text-[var(--color-text-muted)]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("path", { d: "M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" }), /* @__PURE__ */ e.h("polyline", { points: "15 3 21 3 21 9" }), /* @__PURE__ */ e.h("line", { x1: "10", y1: "14", x2: "21", y2: "3" }))
-    ), /* @__PURE__ */ e.h(
+    ), /* @__PURE__ */ e.h("div", { className: "relative" }, /* @__PURE__ */ e.h(
       "button",
       {
         onClick: ge,
-        disabled: J,
-        className: `p-1.5 rounded transition-colors ${J ? "opacity-50 cursor-wait" : "hover:bg-white/10 cursor-pointer"}`,
-        title: V ? `Export failed: ${V}` : "Export as PNG"
+        disabled: X,
+        className: `p-1.5 rounded transition-colors ${X ? "opacity-50 cursor-wait" : "hover:bg-white/10 cursor-pointer"}`,
+        title: I ? `Export failed: ${I}` : "Export as PNG"
       },
-      /* @__PURE__ */ e.h("svg", { className: `w-4 h-4 ${V ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]"}`, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("path", { d: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" }), /* @__PURE__ */ e.h("polyline", { points: "7 10 12 15 17 10" }), /* @__PURE__ */ e.h("line", { x1: "12", y1: "15", x2: "12", y2: "3" }))
-    ), /* @__PURE__ */ e.h("button", { onClick: () => y == null ? void 0 : y(c), className: "p-1.5 rounded hover:bg-white/10 transition-colors", title: R ? "Restore" : "Maximize" }, /* @__PURE__ */ e.h("svg", { className: "w-4 h-4 text-[var(--color-text-muted)]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }))), /* @__PURE__ */ e.h("button", { onClick: ye, className: "p-1.5 rounded hover:bg-white/10 transition-colors", title: "Delete presentation" }, /* @__PURE__ */ e.h("svg", { className: "w-4 h-4 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ e.h("path", { d: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" }), /* @__PURE__ */ e.h("path", { fillRule: "evenodd", d: "M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1h3a1 1 0 0 1 1 1z" }))))), /* @__PURE__ */ e.h("div", { className: "flex-1 relative", onClick: () => g(!1) }, D && /* @__PURE__ */ e.h("iframe", { ref: L, src: D, className: "absolute inset-0 w-full h-full bg-white border-0", title: (d == null ? void 0 : d.title) || "Presentation" })));
+      /* @__PURE__ */ e.h("svg", { className: `w-4 h-4 ${I ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]"}`, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("path", { d: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" }), /* @__PURE__ */ e.h("polyline", { points: "7 10 12 15 17 10" }), /* @__PURE__ */ e.h("line", { x1: "12", y1: "15", x2: "12", y2: "3" }))
+    ), I && // The `title` attribute above never surfaces on touch devices
+    // (iOS Safari doesn't show hover tooltips on tap), so a red
+    // icon with no visible reason reads as "broken, does nothing"
+    // — this popover makes the failure reason tappable too.
+    /* @__PURE__ */ e.h(
+      "div",
+      {
+        className: "absolute right-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-danger)]/40 rounded-lg shadow-2xl p-3",
+        style: { minWidth: 220, maxWidth: 280 },
+        onClick: (u) => u.stopPropagation()
+      },
+      /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-danger)] mb-1" }, "Export failed"),
+      /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-2" }, I),
+      /* @__PURE__ */ e.h(
+        "button",
+        {
+          onClick: () => j(null),
+          className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+        },
+        "Dismiss"
+      )
+    )), /* @__PURE__ */ e.h("button", { onClick: () => y == null ? void 0 : y(s), className: "p-1.5 rounded hover:bg-white/10 transition-colors", title: R ? "Restore" : "Maximize" }, /* @__PURE__ */ e.h("svg", { className: "w-4 h-4 text-[var(--color-text-muted)]", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }))), /* @__PURE__ */ e.h("button", { onClick: ye, className: "p-1.5 rounded hover:bg-white/10 transition-colors", title: "Delete presentation" }, /* @__PURE__ */ e.h("svg", { className: "w-4 h-4 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ e.h("path", { d: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" }), /* @__PURE__ */ e.h("path", { fillRule: "evenodd", d: "M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1h3a1 1 0 0 1 1 1z" }))))), /* @__PURE__ */ e.h("div", { className: "flex-1 relative", onClick: () => g(!1) }, U && /* @__PURE__ */ e.h("iframe", { ref: L, src: U, className: "absolute inset-0 w-full h-full bg-white border-0", title: (d == null ? void 0 : d.title) || "Presentation" })));
   }
-  e.registerSlot("core.nav", i), e.registerWindow("presentations.viewer", s);
+  e.registerSlot("core.nav", i), e.registerWindow("presentations.viewer", c);
 }
 export {
   mt as default,

@@ -495,16 +495,38 @@ export function register(host) {
                 <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
               </svg>
             </button>
-            <button
-              onClick={handleExport}
-              disabled={exportLoading}
-              className={`p-1.5 rounded transition-colors ${exportLoading ? 'opacity-50 cursor-wait' : 'hover:bg-white/10 cursor-pointer'}`}
-              title={exportError ? `Export failed: ${exportError}` : 'Export as PNG'}
-            >
-              <svg className={`w-4 h-4 ${exportError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-muted)]'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
+            <div className="relative">
+              <button
+                onClick={handleExport}
+                disabled={exportLoading}
+                className={`p-1.5 rounded transition-colors ${exportLoading ? 'opacity-50 cursor-wait' : 'hover:bg-white/10 cursor-pointer'}`}
+                title={exportError ? `Export failed: ${exportError}` : 'Export as PNG'}
+              >
+                <svg className={`w-4 h-4 ${exportError ? 'text-[var(--color-danger)]' : 'text-[var(--color-text-muted)]'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+              {exportError && (
+                // The `title` attribute above never surfaces on touch devices
+                // (iOS Safari doesn't show hover tooltips on tap), so a red
+                // icon with no visible reason reads as "broken, does nothing"
+                // — this popover makes the failure reason tappable too.
+                <div
+                  className="absolute right-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-danger)]/40 rounded-lg shadow-2xl p-3"
+                  style={{ minWidth: 220, maxWidth: 280 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="text-[11px] font-medium text-[var(--color-danger)] mb-1">Export failed</div>
+                  <div className="text-[10px] text-[var(--color-text-muted)] mb-2">{exportError}</div>
+                  <button
+                    onClick={() => setExportError(null)}
+                    className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={() => onMaximize?.(windowKey)} className="p-1.5 rounded hover:bg-white/10 transition-colors" title={isMaximized ? 'Restore' : 'Maximize'}>
               <svg className="w-4 h-4 text-[var(--color-text-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
             </button>
