@@ -7,7 +7,8 @@
       "args": [
         "-m",
         "mcps.presentation_server"
-      ]
+      ],
+      "cwd": "/workspace/apps/presentations"
     }
   }
 }
