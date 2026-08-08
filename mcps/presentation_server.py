@@ -33,6 +33,19 @@ published to ``<workspace_home>/.env`` at boot) over loopback, and send the
 workspace's ``X-Api-Key`` (also in that ``.env``) — required by the tunnel
 edge itself when going in over that URL, not just app-level auth.
 
+**Known deployment gap (2026-08-08):** ``_base_url()``/``_api_key()``'s
+fallback chain (env vars, then ``<workspace_home>/.env``) only works if the
+``aw-app-mcp-gateway`` container has ``AW_WORKSPACE_HOME``/
+``AW_WORKSPACE_CONTAINER_DIR`` pointing at a filesystem mount that actually
+has that ``.env`` — verified live that it currently does NOT (neither the
+env vars nor the file are reachable from inside that container), so this
+falls back to the dead loopback default until that container is
+provisioned with ``AW_WORKSPACE_API_URL``/``AW_WORKSPACE_API_KEY`` directly
+(e.g. via its own compose/deployment env, mirroring how the app-container
+env already carries the equivalents for HTTP-type self-registered
+upstreams like aw-app-kb). That's an ``aw-mcp-gateway``-side or deployment
+config change, out of this repo's scope.
+
 Kept identical: the tool surface (same 8 tools, same schemas, same
 namespace-scoping hook for a future curated gateway profile) and the route
 paths on this app's own mounted routes (``/api/apps/presentations/...``).
@@ -434,6 +447,11 @@ def handle_request(request: dict) -> dict:
                 body["silent"] = True
             _apply_namespace(body, namespace)
             result = _api("POST", "/presentations", body)
+            if not result.get("id"):
+                # _api() swallows connection/HTTP errors into {"error":..., "success": False} —
+                # surface that instead of silently formatting an empty "created" message
+                # (the original script had this gap too: a failed call still reported success).
+                return _tool_result(req_id, f"Failed to create presentation: {result.get('error') or result}", is_error=True)
             stamped = result.get("tags") or []
             tag_note = f" tags={stamped}" if stamped else ""
             silent_note = " (silent)" if silent else ""
