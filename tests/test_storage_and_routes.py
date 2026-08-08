@@ -140,6 +140,34 @@ def test_env_inherited_tags(client, monkeypatch):
     assert "run:run-42" in got["tags"]
 
 
+def test_mcp_server_contract(client):
+    """Locks the seam between this app's mounted routes and what
+    agentic-workspace's src/mcp/presentation-server.py actually calls
+    (AWSERV_URL + _APP_PREFIX="/api/apps/presentations" + these relative
+    paths). That MCP server used to call the monolith's old
+    /api/presentations/* routes instead of this app's /api/apps/presentations
+    mount — a silent split-brain (MCP writes landed in the monolith's store,
+    not this app's) that no test caught. This doesn't import the sibling
+    repo (it isn't checked out in this repo's CI); it just pins the route
+    shape presentation-server.py depends on so a future rename here shows up
+    as a failing test instead of a silent MCP-tool breakage.
+    """
+    routes = {(m, r.path) for r in client.app.routes for m in getattr(r, "methods", set())}
+
+    required = {
+        ("GET", "/presentations"),
+        ("POST", "/presentations"),
+        ("GET", "/presentations/{presentation_id}"),
+        ("PUT", "/presentations/{presentation_id}"),
+        ("DELETE", "/presentations/{presentation_id}"),
+        ("POST", "/presentations/{presentation_id}/export"),
+        ("GET", "/presentations/{presentation_id}/html"),
+        ("POST", "/presentations/{presentation_id}/share"),
+    }
+    missing = required - routes
+    assert not missing, f"presentation-server.py depends on these routes, now missing: {missing}"
+
+
 def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():
     """Regression (2026-08-05): F1 hot-loads this app's sub-app via a bare
     Mount() into the already-running process — Starlette's own
