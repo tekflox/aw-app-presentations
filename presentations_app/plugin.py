@@ -10,6 +10,11 @@ Ports the monolith's ``/ws/presentations`` + ``/api/presentations/*``
   in this app's own Postgres tables (``app__presentations__*``) instead of
   the monolith's SQLModel session.
 
+Also self-registers an in-process MCP-over-HTTP endpoint (``mcp/`` —
+``http_handler.py`` + ``self_register.py``) with aw-mcp-gateway, replacing
+an earlier stdio port that needed credentials a sibling container had no
+sustainable way to hold. See ``mcp/http_handler.py``'s docstring.
+
 The SPA plugin-host wiring (2026-08-05) now has a real ``ui/src/plugin.jsx``
 consuming this app's ``core.nav`` + ``core.window.body:presentations.viewer``
 contributions — the "inert until aw-frontend wires it" note that used to be
@@ -23,6 +28,7 @@ import logging
 import os
 
 from . import routes as routes_mod
+from .mcp import self_register as mcp_self_register
 from .storage import PresentationStore
 
 log = logging.getLogger("aw_apps.presentations")
@@ -54,6 +60,11 @@ class PresentationsAppPlugin:
         subapp = routes_mod.build_app(self.store, self._export_dir)
         ctx.routes.register(subapp)
         ctx.on_deactivate(self._close_all_sockets)
+
+        # Discoverable by aw-mcp-gateway's app-scan — see mcp/self_register.py.
+        port = int(os.environ.get("AW_PORT", "9030"))
+        mcp_self_register.register_self(ctx.package_dir, port)
+
         log.info("aw-app-presentations activated")
 
     async def deactivate(self) -> None:

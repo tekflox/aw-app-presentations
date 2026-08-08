@@ -140,17 +140,15 @@ def test_env_inherited_tags(client, monkeypatch):
     assert "run:run-42" in got["tags"]
 
 
-def test_mcp_server_contract(client):
-    """Locks the seam between this app's mounted routes and what
-    agentic-workspace's src/mcp/presentation-server.py actually calls
-    (AWSERV_URL + _APP_PREFIX="/api/apps/presentations" + these relative
-    paths). That MCP server used to call the monolith's old
-    /api/presentations/* routes instead of this app's /api/apps/presentations
-    mount — a silent split-brain (MCP writes landed in the monolith's store,
-    not this app's) that no test caught. This doesn't import the sibling
-    repo (it isn't checked out in this repo's CI); it just pins the route
-    shape presentation-server.py depends on so a future rename here shows up
-    as a failing test instead of a silent MCP-tool breakage.
+def test_rest_route_contract(client):
+    """Pins the public REST route shape — the share-link/html endpoints in
+    particular are depended on by external viewers (Telegram mini-app links)
+    outside this process, so a rename here should fail loudly rather than
+    surface as a 404 for someone with an already-shared link. The in-process
+    MCP handler (presentations_app/mcp/http_handler.py) calls the store
+    directly rather than these HTTP routes, so it isn't coupled to this
+    contract the way the now-removed stdio MCP server used to be — see
+    test_mcp_server.py for that handler's own coverage.
     """
     routes = {(m, r.path) for r in client.app.routes for m in getattr(r, "methods", set())}
 
@@ -165,7 +163,7 @@ def test_mcp_server_contract(client):
         ("POST", "/presentations/{presentation_id}/share"),
     }
     missing = required - routes
-    assert not missing, f"presentation-server.py depends on these routes, now missing: {missing}"
+    assert not missing, f"external callers depend on these routes, now missing: {missing}"
 
 
 def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():
@@ -187,6 +185,10 @@ def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():
         def __init__(self):
             self.db = FakeDb()
             self._on_deactivate = None
+            # Nonexistent on purpose — self_register.register_self() no-ops
+            # for a missing package_dir, which is all this test needs (it's
+            # only exercising set_loop()).
+            self.package_dir = "/nonexistent-in-test"
 
         def on_deactivate(self, fn):
             self._on_deactivate = fn
