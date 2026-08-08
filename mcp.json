@@ -8,7 +8,10 @@
         "-m",
         "mcps.presentation_server"
       ],
-      "cwd": "/workspace/apps/presentations"
+      "cwd": "/workspace/apps/presentations",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
     }
   }
 }
