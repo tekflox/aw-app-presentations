@@ -14,18 +14,28 @@ Dropped in the port (monolith-only concepts that don't apply once this
 lives inside the app's own repo):
   * ``_task_env.merge_tags`` import — inlined below (it was already a tiny,
     dependency-free helper; only the import path was monolith-specific).
-  * ``.tmp/awserv_api_key`` file lookup / ``x-api-key`` header — this app's
-    own mounted routes are unauthenticated on the current framework (see
-    presentations_app/routes.py's module docstring re: the IdentityGuard
-    gap), so there's nothing to authenticate against yet.
+  * ``.tmp/awserv_api_key`` file lookup — replaced with the same
+    ``AW_WORKSPACE_API_KEY`` / ``AW_WORKSPACE_API_URL`` resolution
+    ``src/cli/local_client.py`` uses (see ``_base_url``/``_api_key`` below).
   * ``from src.config import get_aw_domain, get_config`` for the public
     share URL — replaced with the ``AW_PUBLIC_URL`` env var, since this
     process no longer has the monolith's package tree on its path.
 
+Networking (the part that actually changed conceptually, not just
+mechanically): the original script assumed it ran *inside* awserv's own
+container/netns (``127.0.0.1:9123`` loopback). This one is spawned by
+``aw-app-mcp-gateway`` — a *different* container — so loopback is dead
+(confirmed live: every call silently failed and ``create_presentation``
+returned an empty result). This mirrors exactly the "agent-runner reaching
+the workspace" problem ``src/cli/local_client.py`` already solves: prefer
+``AW_WORKSPACE_API_URL`` (the server's externally-reachable tunnel URL,
+published to ``<workspace_home>/.env`` at boot) over loopback, and send the
+workspace's ``X-Api-Key`` (also in that ``.env``) — required by the tunnel
+edge itself when going in over that URL, not just app-level auth.
+
 Kept identical: the tool surface (same 8 tools, same schemas, same
-namespace-scoping hook for a future curated gateway profile) and the HTTP
-calls into this app's own mounted routes (``/api/apps/presentations/...``),
-since that part isn't a monolith concept — it's just this app's own API.
+namespace-scoping hook for a future curated gateway profile) and the route
+paths on this app's own mounted routes (``/api/apps/presentations/...``).
 
 Run: ``python -m mcps.presentation_server`` (stdio). Registered via this
 repo's root ``mcp.json`` — the gateway spawns it with cwd set to the app
@@ -39,8 +49,54 @@ import os
 import sys
 import urllib.request
 
-AWSERV_URL = os.environ.get("AWSERV_URL", "http://127.0.0.1:9123")
 _APP_PREFIX = "/api/apps/presentations"
+_API_KEY_HEADER = "X-Api-Key"
+
+
+def _workspace_home_path() -> str:
+    """Mirrors src/apps/paths.py's workspace_home_path(): the shared
+    workspace mount's .env lives at <container dir>/.aw-workspace when
+    AW_WORKSPACE_HOME isn't set — same fallback the CLI itself uses."""
+    home = os.environ.get("AW_WORKSPACE_HOME")
+    if home:
+        return home
+    root = os.path.realpath(os.environ.get("AW_WORKSPACE_CONTAINER_DIR", "/opt/aw-workspace"))
+    return os.path.join(root, ".aw-workspace")
+
+
+def _read_workspace_env(name: str) -> str | None:
+    """Read `name` from <workspace_home>/.env — the file the server mints
+    AW_WORKSPACE_API_KEY / AW_WORKSPACE_API_URL into, for sibling processes
+    (like this one, if it happens to share that filesystem mount) with no
+    other way to learn them."""
+    env_file = os.path.join(_workspace_home_path(), ".env")
+    prefix = f"{name}="
+    try:
+        with open(env_file, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith(prefix):
+                    return line[len(prefix):].strip()
+    except OSError:
+        return None
+    return None
+
+
+def _base_url() -> str:
+    """Explicit override, then the server's published external URL (the
+    cross-container path this process actually needs), then co-located
+    loopback as a last resort (correct only if some future deployment
+    spawns this inside awserv's own netns)."""
+    override = os.environ.get("AW_LOCAL_API_URL")
+    if override:
+        return override
+    external = os.environ.get("AW_WORKSPACE_API_URL") or _read_workspace_env("AW_WORKSPACE_API_URL")
+    if external:
+        return external
+    return f"http://127.0.0.1:{os.environ.get('AW_PORT', '9030')}"
+
+
+def _api_key() -> str | None:
+    return os.environ.get("AW_WORKSPACE_API_KEY") or _read_workspace_env("AW_WORKSPACE_API_KEY")
 
 
 def _inherited_tags() -> list[str]:
@@ -88,12 +144,15 @@ def merge_tags(caller_tags) -> list[str]:
 
 def _api(method, path, body=None):
     """Make an HTTP request to this app's own mounted sub-app."""
-    url = f"{AWSERV_URL}{_APP_PREFIX}{path}"
+    url = f"{_base_url()}{_APP_PREFIX}{path}"
     data = json.dumps(body).encode() if body else None
     headers = {"Content-Type": "application/json"} if data else {}
+    api_key = _api_key()
+    if api_key:
+        headers[_API_KEY_HEADER] = api_key
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
     except Exception as e:
         return {"error": str(e), "success": False}
@@ -523,10 +582,10 @@ img {{ max-width:100%; max-height:100vh; object-fit:contain; }}
             if resp.get("error") or not resp.get("success"):
                 return _tool_result(req_id, f"Failed to create share link: {resp}", is_error=True)
             token = resp.get("token", "")
-            # No monolith src.config here — a decoupled app doesn't have that
-            # package tree on its path. AW_PUBLIC_URL is the app-framework
-            # equivalent; an empty base still returns a valid path-only URL.
-            base = os.environ.get("AW_PUBLIC_URL", "").rstrip("/")
+            # Reuse the same resolved base as every other call — it's the
+            # server's actual externally-reachable URL when AW_WORKSPACE_API_URL
+            # is set, which is exactly what an external viewer link needs too.
+            base = os.environ.get("AW_PUBLIC_URL", "").rstrip("/") or _base_url().rstrip("/")
             url = f"{base}{_APP_PREFIX}/presentations/{presentation_id}/html?token={token}"
             return _tool_result(
                 req_id,
