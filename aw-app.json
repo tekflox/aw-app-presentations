@@ -53,7 +53,20 @@
         "path": "skills/aw-presentation/SKILL.md",
         "description": "How to create visual presentations from an agent (create_presentation, commented_file, show_image, export_presentation_to_image, share_presentation) \u2014 analysis reports, diagrams, code reviews, images. Diffs are handled by aw-diff-tool's own skill."
       }
-    ]
+    ],
+    "mcp": {
+      "reload_on_save": true,
+      "provides": [
+        "create_presentation",
+        "update_presentation",
+        "delete_presentation",
+        "list_presentations",
+        "show_image",
+        "export_presentation_to_image",
+        "commented_file",
+        "share_presentation"
+      ]
+    }
   },
   "config_schema": {
     "type": "object",

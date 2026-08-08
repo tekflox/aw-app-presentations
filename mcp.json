@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "aw-presentation": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "-m",
+        "mcps.presentation_server"
+      ]
+    }
+  }
+}
