@@ -234,12 +234,27 @@ _chromium_ready = False
 
 
 def _ensure_chromium() -> None:
-    """Install playwright's chromium once, lazily. Idempotent and cheap after.
+    """Install playwright's chromium AND its system libraries, once, lazily.
 
-    `playwright install` is itself idempotent (it no-ops when the browser is
-    already present), but it still costs a subprocess, so the module-level flag
-    keeps the second export from paying for it. The lock is what stops two
-    concurrent exports from both shelling out and writing the same files.
+    Two separate installs, and missing either one leaves a browser that cannot
+    start:
+
+    * ``playwright install chromium`` fetches the ~150 MB browser build.
+    * ``--with-deps`` apt-installs the ~17 shared libraries it links against
+      (libnss3, libglib, libatk, the libX* set...). The workspace image does not
+      carry a GUI stack, so without this the binary is present and dies on
+      launch with "Target page, context or browser has been closed" — an error
+      that names nothing useful. Confirmed by ldd: 17 "not found" entries.
+
+    ``--with-deps`` shells out to apt, which needs root; the workspace container
+    runs as uid 1001 with NOPASSWD sudo, so it is prefixed when available and
+    the plain form is tried otherwise (a container without sudo either already
+    has the libraries or cannot get them, and the error below says which).
+
+    Lazy, not at activate(): this is minutes of download plus an apt run, and
+    most workspaces never export anything. Idempotent afterwards — `playwright
+    install` no-ops when the browser is present, and the module flag skips even
+    that subprocess.
     """
     global _chromium_ready
     if _chromium_ready:
@@ -247,19 +262,33 @@ def _ensure_chromium() -> None:
     with _INSTALL_LOCK:
         if _chromium_ready:
             return
-        _log.info("presentations: installing chromium for PNG export (first use)")
-        proc = subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium"],
-            capture_output=True, text=True, timeout=900,
-        )
-        if proc.returncode != 0:
-            # Do NOT set the flag — the next export retries rather than
-            # inheriting a failure from a transient network problem.
-            raise RuntimeError(
-                "playwright install chromium failed: " + (proc.stderr or "")[-300:]
-            )
-        _chromium_ready = True
-        _log.info("presentations: chromium ready")
+        base = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
+        cmds = [["sudo", "-n", *base], base] if _has_sudo() else [base]
+        last = ""
+        for cmd in cmds:
+            _log.info("presentations: installing chromium for PNG export (first use): %s",
+                      " ".join(cmd[:4]))
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+            except Exception as exc:  # noqa: BLE001 — try the next form
+                last = str(exc)
+                continue
+            if proc.returncode == 0:
+                _chromium_ready = True
+                _log.info("presentations: chromium ready")
+                return
+            last = (proc.stderr or proc.stdout or "")[-400:]
+        # Deliberately do NOT set the flag — a transient failure (no network,
+        # apt lock held) must be retried by the next export, not latched.
+        raise RuntimeError("playwright install chromium failed: " + last)
+
+
+def _has_sudo() -> bool:
+    try:
+        return subprocess.run(["sudo", "-n", "true"], capture_output=True,
+                              timeout=10).returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _render_html_to_png(html: str, output_path: str, width: int, height: int,

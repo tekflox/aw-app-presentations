@@ -284,19 +284,56 @@ class _Fail:
     stderr = "network unreachable"
 
 
-def test_chromium_is_installed_on_first_use(monkeypatch):
+def test_chromium_is_installed_with_its_system_libraries(monkeypatch):
+    """--with-deps is not optional here: the workspace image carries no GUI
+    stack, so without it the browser binary lands and dies on launch with
+    "Target page, context or browser has been closed" (ldd: 17 not-found)."""
     _reset_ready(monkeypatch)
+    monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
     routes_mod._ensure_chromium()
 
     assert len(calls) == 1
-    assert calls[0][1:] == ["-m", "playwright", "install", "chromium"]
+    assert calls[0][1:] == ["-m", "playwright", "install", "--with-deps", "chromium"]
+
+
+def test_sudo_is_used_when_available(monkeypatch):
+    """--with-deps shells out to apt; the workspace runs as uid 1001."""
+    _reset_ready(monkeypatch)
+    monkeypatch.setattr(routes_mod, "_has_sudo", lambda: True)
+    calls = []
+    monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
+
+    routes_mod._ensure_chromium()
+
+    assert calls[0][:2] == ["sudo", "-n"]
+
+
+def test_falls_back_to_the_unprivileged_form_when_sudo_fails(monkeypatch):
+    """A sudo that exists but is refused for this command must not be the end
+    of it — the plain install still helps a container that already has the
+    libraries."""
+    _reset_ready(monkeypatch)
+    monkeypatch.setattr(routes_mod, "_has_sudo", lambda: True)
+    calls = []
+
+    def _run(cmd, **kw):
+        calls.append(cmd)
+        return _Ok() if cmd[0] != "sudo" else _Fail()
+
+    monkeypatch.setattr(routes_mod.subprocess, "run", _run)
+
+    routes_mod._ensure_chromium()
+
+    assert len(calls) == 2
+    assert calls[0][0] == "sudo" and calls[1][0] != "sudo"
 
 
 def test_chromium_is_not_reinstalled_on_every_export(monkeypatch):
     _reset_ready(monkeypatch)
+    monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
@@ -311,6 +348,7 @@ def test_a_failed_install_raises_and_is_retried_next_time(monkeypatch):
     """A transient network failure must not be latched as 'ready' — the next
     export has to try again rather than fail forever on a stale flag."""
     _reset_ready(monkeypatch)
+    monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Fail())
 
