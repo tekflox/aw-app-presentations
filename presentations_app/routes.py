@@ -23,6 +23,9 @@ import base64
 import json
 import logging
 import os
+import subprocess
+import sys
+import threading
 import time
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -34,8 +37,7 @@ from .storage import PresentationStore
 _log = logging.getLogger("presentations_app.routes")
 
 
-def build_app(store: PresentationStore, export_dir: str,
-              cdp_endpoint: str | None = None) -> FastAPI:
+def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
     api = FastAPI()
 
     @api.on_event("startup")
@@ -98,7 +100,7 @@ def build_app(store: PresentationStore, export_dir: str,
 
         try:
             await run_in_threadpool(_render_html_to_png, p.html, output_path,
-                                    width, height, scale, cdp_endpoint)
+                                    width, height, scale)
         except Exception as exc:
             unavailable = _playwright_unavailable_reason(exc)
             if unavailable:
@@ -212,54 +214,70 @@ def build_app(store: PresentationStore, export_dir: str,
     return api
 
 
-# The workspace already runs a Chromium: aw-app-browser exposes one over CDP,
-# and the playwright MCP server drives it that way (--cdp-endpoint). Reusing it
-# is why this app needs only the `playwright` pip package and not its ~150 MB of
-# browser binaries — `playwright install chromium` is a second install step that
-# nothing in the app lifecycle runs, so a fresh workspace had the package (once
-# runtime.pip_requires started being honoured) and still no browser.
+# PNG export drives its OWN Chromium — a dedicated one, deliberately not the
+# shared browser aw-app-browser runs. Attaching to that over CDP was tried on
+# 2026-08-14 and reverted the same day: it makes every export contend with
+# whatever the playwright MCP is doing in that browser (its own tabs, its own
+# navigation), couples this app's availability to another app's, and puts a
+# render that must not be interfered with inside a process other callers drive.
 #
-# Override with the `cdp_endpoint` config key; set it empty to force a local
-# launch (useful if aw-app-browser isn't installed and the binaries are).
-_DEFAULT_CDP = "http://aw-app-browser:9223"
+# The cost of owning it is the browser binaries: `playwright install chromium`
+# is a ~150 MB step separate from the pip package, and nothing in the app
+# lifecycle ran it — so a fresh workspace had the package (once core started
+# honouring runtime.pip_requires) and still no browser, which is exactly how
+# this endpoint was found broken. _ensure_chromium below runs that step once,
+# lazily, on the first export that needs it: at activate() it would add minutes
+# to every workspace boot, including the many that never export anything.
+
+_INSTALL_LOCK = threading.Lock()
+_chromium_ready = False
 
 
-def _render_html_to_png(html: str, output_path: str, width: int, height: int, scale: float,
-                        cdp_endpoint: str | None = None) -> None:
-    """Render HTML to PNG, preferring the shared browser over a local one.
+def _ensure_chromium() -> None:
+    """Install playwright's chromium once, lazily. Idempotent and cheap after.
 
-    Ported from the monolith, which only knew how to launch its own. playwright
-    stays a soft import — nothing else in this app needs it.
+    `playwright install` is itself idempotent (it no-ops when the browser is
+    already present), but it still costs a subprocess, so the module-level flag
+    keeps the second export from paying for it. The lock is what stops two
+    concurrent exports from both shelling out and writing the same files.
     """
+    global _chromium_ready
+    if _chromium_ready:
+        return
+    with _INSTALL_LOCK:
+        if _chromium_ready:
+            return
+        _log.info("presentations: installing chromium for PNG export (first use)")
+        proc = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True, text=True, timeout=900,
+        )
+        if proc.returncode != 0:
+            # Do NOT set the flag — the next export retries rather than
+            # inheriting a failure from a transient network problem.
+            raise RuntimeError(
+                "playwright install chromium failed: " + (proc.stderr or "")[-300:]
+            )
+        _chromium_ready = True
+        _log.info("presentations: chromium ready")
+
+
+def _render_html_to_png(html: str, output_path: str, width: int, height: int,
+                        scale: float) -> None:
+    """Render HTML to PNG in this app's own headless Chromium."""
     from playwright.sync_api import sync_playwright
 
-    endpoint = _DEFAULT_CDP if cdp_endpoint is None else cdp_endpoint
-
+    _ensure_chromium()
     with sync_playwright() as p:
-        browser = None
-        connected = False
-        if endpoint:
-            try:
-                browser = p.chromium.connect_over_cdp(endpoint)
-                connected = True
-            except Exception as exc:  # noqa: BLE001 — fall back to a local launch
-                _log.info("presentations: CDP %s unavailable (%s); launching locally",
-                          endpoint, exc)
-        if browser is None:
-            browser = p.chromium.launch(args=["--no-sandbox"])
+        browser = p.chromium.launch(args=["--no-sandbox"])
         try:
             context = browser.new_context(viewport={"width": width, "height": height},
                                           device_scale_factor=scale)
             page = context.new_page()
             page.set_content(html, wait_until="load")
             page.screenshot(path=output_path, full_page=True)
-            context.close()
         finally:
-            # Only close a browser we launched. A CDP-attached one is another
-            # container's process — closing it would take the shared browser
-            # down for every other caller (the playwright MCP included).
-            if not connected:
-                browser.close()
+            browser.close()
 
 
 def _playwright_unavailable_reason(exc: Exception) -> str | None:

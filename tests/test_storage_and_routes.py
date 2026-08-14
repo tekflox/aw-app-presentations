@@ -134,7 +134,7 @@ def test_export_returns_500_for_unrelated_failures(client, monkeypatch):
 def test_export_includes_a_data_url_on_success(client, monkeypatch, tmp_path):
     pid = client.post("/presentations", json={"title": "T", "html": "<b>x</b>"}).json()["id"]
 
-    def _fake_render(html, output_path, width, height, scale, cdp_endpoint=None):
+    def _fake_render(html, output_path, width, height, scale):
         with open(output_path, "wb") as f:
             f.write(b"\x89PNG\r\n\x1a\nfakepngbytes")
     monkeypatch.setattr(routes_mod, "_render_html_to_png", _fake_render)
@@ -260,144 +260,112 @@ def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():
 
 
 # ---------------------------------------------------------------------------
-# _render_html_to_png — which browser it drives.
+# _ensure_chromium — the browser binaries.
 #
-# The app needs only the `playwright` pip package because it attaches to the
-# Chromium aw-app-browser already runs (over CDP) instead of launching its own.
-# `playwright install chromium` is a ~150 MB second step nothing in the app
-# lifecycle runs, so a locally-launching export is broken on a fresh workspace
-# even when the package is present — which is exactly how it was found.
+# `playwright install chromium` is a ~150 MB step separate from the pip package
+# and nothing in the app lifecycle ran it, so a fresh workspace had the package
+# and no browser. It runs lazily on first export: at activate() it would add
+# minutes to every boot, including the many that never export anything.
 # ---------------------------------------------------------------------------
 
-class _FakePage:
-    def __init__(self, path_sink):
-        self._sink = path_sink
-
-    def set_content(self, html, wait_until=None):
-        pass
-
-    def screenshot(self, path, full_page=False):
-        with open(path, "wb") as f:
-            f.write(b"\x89PNG\r\n\x1a\nx")
-        self._sink.append(path)
+def _reset_ready(monkeypatch):
+    monkeypatch.setattr(routes_mod, "_chromium_ready", False, raising=False)
 
 
-class _FakeContext:
-    def __init__(self, sink):
-        self._sink = sink
-
-    def new_page(self):
-        return _FakePage(self._sink)
-
-    def close(self):
-        pass
+class _Ok:
+    returncode = 0
+    stdout = ""
+    stderr = ""
 
 
-class _FakeBrowser:
-    def __init__(self, sink):
-        self._sink = sink
-        self.closed = False
-
-    def new_context(self, **kw):
-        return _FakeContext(self._sink)
-
-    def close(self):
-        self.closed = True
+class _Fail:
+    returncode = 1
+    stdout = ""
+    stderr = "network unreachable"
 
 
-class _FakeChromium:
-    def __init__(self, sink, cdp_ok=True):
-        self._sink = sink
-        self._cdp_ok = cdp_ok
-        self.connected_to = None
-        self.launched = False
-        self.browser = _FakeBrowser(sink)
+def test_chromium_is_installed_on_first_use(monkeypatch):
+    _reset_ready(monkeypatch)
+    calls = []
+    monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
-    def connect_over_cdp(self, endpoint):
-        if not self._cdp_ok:
-            raise RuntimeError("connection refused")
-        self.connected_to = endpoint
-        return self.browser
+    routes_mod._ensure_chromium()
 
-    def launch(self, args=None):
-        self.launched = True
-        return self.browser
+    assert len(calls) == 1
+    assert calls[0][1:] == ["-m", "playwright", "install", "chromium"]
 
 
-class _FakePlaywright:
-    def __init__(self, chromium):
-        self.chromium = chromium
+def test_chromium_is_not_reinstalled_on_every_export(monkeypatch):
+    _reset_ready(monkeypatch)
+    calls = []
+    monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
-    def __enter__(self):
-        return self
+    routes_mod._ensure_chromium()
+    routes_mod._ensure_chromium()
+    routes_mod._ensure_chromium()
 
-    def __exit__(self, *a):
-        return False
+    assert len(calls) == 1
 
 
-def _patch_playwright(monkeypatch, chromium):
-    import sys
+def test_a_failed_install_raises_and_is_retried_next_time(monkeypatch):
+    """A transient network failure must not be latched as 'ready' — the next
+    export has to try again rather than fail forever on a stale flag."""
+    _reset_ready(monkeypatch)
+    calls = []
+    monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Fail())
+
+    with pytest.raises(RuntimeError, match="playwright install chromium failed"):
+        routes_mod._ensure_chromium()
+    with pytest.raises(RuntimeError):
+        routes_mod._ensure_chromium()
+
+    assert len(calls) == 2
+
+
+def test_render_launches_its_own_browser_and_closes_it(monkeypatch, tmp_path):
+    """Its OWN browser — deliberately not the shared aw-app-browser, so an
+    export never contends with whatever the playwright MCP is driving there."""
+    import sys as _sys
     import types
+
+    _reset_ready(monkeypatch)
+    monkeypatch.setattr(routes_mod, "_ensure_chromium", lambda: None)
+
+    state = {"launched": False, "closed": False, "written": None}
+
+    class _Page:
+        def set_content(self, html, wait_until=None): pass
+        def screenshot(self, path, full_page=False):
+            with open(path, "wb") as f:
+                f.write(b"\x89PNG\r\n\x1a\nx")
+            state["written"] = path
+
+    class _Ctx:
+        def new_page(self): return _Page()
+
+    class _Browser:
+        def new_context(self, **kw): return _Ctx()
+        def close(self): state["closed"] = True
+
+    class _Chromium:
+        def launch(self, args=None):
+            state["launched"] = True
+            return _Browser()
+
+    class _PW:
+        chromium = _Chromium()
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
 
     mod = types.ModuleType("playwright")
     sync_api = types.ModuleType("playwright.sync_api")
-    sync_api.sync_playwright = lambda: _FakePlaywright(chromium)
-    monkeypatch.setitem(sys.modules, "playwright", mod)
-    monkeypatch.setitem(sys.modules, "playwright.sync_api", sync_api)
-
-
-def test_render_attaches_to_the_shared_browser_by_default(monkeypatch, tmp_path):
-    sink = []
-    chromium = _FakeChromium(sink)
-    _patch_playwright(monkeypatch, chromium)
+    sync_api.sync_playwright = lambda: _PW()
+    monkeypatch.setitem(_sys.modules, "playwright", mod)
+    monkeypatch.setitem(_sys.modules, "playwright.sync_api", sync_api)
 
     out = str(tmp_path / "a.png")
     routes_mod._render_html_to_png("<b>x</b>", out, 800, 600, 1.0)
 
-    assert chromium.connected_to == routes_mod._DEFAULT_CDP
-    assert chromium.launched is False
-    assert sink == [out]
-
-
-def test_render_does_not_close_a_browser_it_did_not_launch(monkeypatch, tmp_path):
-    """Closing the CDP-attached browser would take the shared Chromium down for
-    every other caller — the playwright MCP server included."""
-    chromium = _FakeChromium([])
-    _patch_playwright(monkeypatch, chromium)
-
-    routes_mod._render_html_to_png("<b>x</b>", str(tmp_path / "a.png"), 800, 600, 1.0)
-
-    assert chromium.browser.closed is False
-
-
-def test_render_falls_back_to_a_local_launch_when_cdp_is_unreachable(monkeypatch, tmp_path):
-    chromium = _FakeChromium([], cdp_ok=False)
-    _patch_playwright(monkeypatch, chromium)
-
-    routes_mod._render_html_to_png("<b>x</b>", str(tmp_path / "a.png"), 800, 600, 1.0)
-
-    assert chromium.launched is True
-    assert chromium.browser.closed is True, "a browser we launched must be closed"
-
-
-def test_an_explicit_empty_endpoint_forces_a_local_launch(monkeypatch, tmp_path):
-    """Absent config (None) means 'use the default'; an explicit "" means
-    'never use CDP'. The two must not collapse into one."""
-    chromium = _FakeChromium([])
-    _patch_playwright(monkeypatch, chromium)
-
-    routes_mod._render_html_to_png("<b>x</b>", str(tmp_path / "a.png"), 800, 600, 1.0,
-                                   cdp_endpoint="")
-
-    assert chromium.connected_to is None
-    assert chromium.launched is True
-
-
-def test_a_configured_endpoint_overrides_the_default(monkeypatch, tmp_path):
-    chromium = _FakeChromium([])
-    _patch_playwright(monkeypatch, chromium)
-
-    routes_mod._render_html_to_png("<b>x</b>", str(tmp_path / "a.png"), 800, 600, 1.0,
-                                   cdp_endpoint="http://elsewhere:1234")
-
-    assert chromium.connected_to == "http://elsewhere:1234"
+    assert state["launched"] is True
+    assert state["closed"] is True, "a browser we launched must be closed"
+    assert state["written"] == out

@@ -57,10 +57,7 @@ class PresentationsAppPlugin:
         os.makedirs(app_dir, exist_ok=True)
         self._export_dir = app_dir
 
-        # None (key absent) means "use the default CDP endpoint"; an explicit
-        # empty string means "always launch locally" — the two are different.
-        cdp = ctx.config.get("cdp_endpoint") if hasattr(ctx, "config") else None
-        subapp = routes_mod.build_app(self.store, self._export_dir, cdp_endpoint=cdp)
+        subapp = routes_mod.build_app(self.store, self._export_dir)
         ctx.routes.register(subapp)
         ctx.on_deactivate(self._close_all_sockets)
 
