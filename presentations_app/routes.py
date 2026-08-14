@@ -34,7 +34,8 @@ from .storage import PresentationStore
 _log = logging.getLogger("presentations_app.routes")
 
 
-def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
+def build_app(store: PresentationStore, export_dir: str,
+              cdp_endpoint: str | None = None) -> FastAPI:
     api = FastAPI()
 
     @api.on_event("startup")
@@ -96,7 +97,8 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         scale = float((data or {}).get("scale") or 2.0)
 
         try:
-            await run_in_threadpool(_render_html_to_png, p.html, output_path, width, height, scale)
+            await run_in_threadpool(_render_html_to_png, p.html, output_path,
+                                    width, height, scale, cdp_endpoint)
         except Exception as exc:
             unavailable = _playwright_unavailable_reason(exc)
             if unavailable:
@@ -210,21 +212,54 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
     return api
 
 
-def _render_html_to_png(html: str, output_path: str, width: int, height: int, scale: float) -> None:
-    """Ported verbatim from the monolith — playwright stays a soft import,
-    only this endpoint needs the browser binaries."""
+# The workspace already runs a Chromium: aw-app-browser exposes one over CDP,
+# and the playwright MCP server drives it that way (--cdp-endpoint). Reusing it
+# is why this app needs only the `playwright` pip package and not its ~150 MB of
+# browser binaries — `playwright install chromium` is a second install step that
+# nothing in the app lifecycle runs, so a fresh workspace had the package (once
+# runtime.pip_requires started being honoured) and still no browser.
+#
+# Override with the `cdp_endpoint` config key; set it empty to force a local
+# launch (useful if aw-app-browser isn't installed and the binaries are).
+_DEFAULT_CDP = "http://aw-app-browser:9223"
+
+
+def _render_html_to_png(html: str, output_path: str, width: int, height: int, scale: float,
+                        cdp_endpoint: str | None = None) -> None:
+    """Render HTML to PNG, preferring the shared browser over a local one.
+
+    Ported from the monolith, which only knew how to launch its own. playwright
+    stays a soft import — nothing else in this app needs it.
+    """
     from playwright.sync_api import sync_playwright
 
+    endpoint = _DEFAULT_CDP if cdp_endpoint is None else cdp_endpoint
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--no-sandbox"])
+        browser = None
+        connected = False
+        if endpoint:
+            try:
+                browser = p.chromium.connect_over_cdp(endpoint)
+                connected = True
+            except Exception as exc:  # noqa: BLE001 — fall back to a local launch
+                _log.info("presentations: CDP %s unavailable (%s); launching locally",
+                          endpoint, exc)
+        if browser is None:
+            browser = p.chromium.launch(args=["--no-sandbox"])
         try:
             context = browser.new_context(viewport={"width": width, "height": height},
-                                           device_scale_factor=scale)
+                                          device_scale_factor=scale)
             page = context.new_page()
             page.set_content(html, wait_until="load")
             page.screenshot(path=output_path, full_page=True)
+            context.close()
         finally:
-            browser.close()
+            # Only close a browser we launched. A CDP-attached one is another
+            # container's process — closing it would take the shared browser
+            # down for every other caller (the playwright MCP included).
+            if not connected:
+                browser.close()
 
 
 def _playwright_unavailable_reason(exc: Exception) -> str | None:

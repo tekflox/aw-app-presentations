@@ -72,7 +72,14 @@
   },
   "config_schema": {
     "type": "object",
-    "properties": {},
+    "properties": {
+      "cdp_endpoint": {
+        "type": "string",
+        "default": "http://aw-app-browser:9223",
+        "title": "Browser CDP endpoint",
+        "description": "Chromium to drive for PNG export. Defaults to the shared browser aw-app-browser already runs, so this app needs only the `playwright` pip package and not its ~150 MB of browser binaries (`playwright install chromium` is a second step nothing in the app lifecycle runs). Set empty to force a local launch instead."
+      }
+    },
     "required": []
   },
   "dependencies": {},
