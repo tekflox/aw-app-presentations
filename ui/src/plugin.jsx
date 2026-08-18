@@ -43,6 +43,19 @@ import { toPng } from 'html-to-image';
 export function register(host) {
   const { useState, useRef, useCallback, useEffect } = host.React;
 
+  // The width a presentation is *previewed* at, shared with PNG export's
+  // 1280px default (routes.py / mcp/http_handler.py) so a thumbnail and an
+  // exported image are the same picture. It used to be three unreconciled
+  // numbers — 1000x650 here, 1280x800 for export, 1000x700 for the pop-out —
+  // none of them documented.
+  //
+  // Deliberately a desktop-ish fixed width, NOT the device width: a preview
+  // should show the desktop look, and a constant aspect ratio is what keeps
+  // the gallery grid from going ragged. 832 preserves the 1.538 ratio the
+  // gallery has always had, so this is a rename, not a relayout.
+  const REFERENCE_WIDTH = 1280;
+  const REFERENCE_HEIGHT = 832;
+
   // ------------------------------------------------------------------
   // 1. Nav entry (top bar) + standing WS + global open-by-id hook
   // ------------------------------------------------------------------
@@ -173,8 +186,8 @@ export function register(host) {
   function PresentationThumbnail({ presentation, onClick, onDelete }) {
     const wrapperRef = useRef(null);
     const [scale, setScale] = useState(0.16);
-    const REAL_W = 1000;
-    const REAL_H = 650;
+    const REAL_W = REFERENCE_WIDTH;
+    const REAL_H = REFERENCE_HEIGHT;
     const ASPECT = REAL_H / REAL_W;
 
     useEffect(() => {

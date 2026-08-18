@@ -1,4 +1,4 @@
-function Pe(e, t) {
+function Le(e, t) {
   if (e.match(/^[a-z]+:\/\//i))
     return e;
   if (e.match(/^\/\//))
@@ -8,7 +8,7 @@ function Pe(e, t) {
   const n = document.implementation.createHTMLDocument(), r = n.createElement("base"), a = n.createElement("a");
   return n.head.appendChild(r), n.body.appendChild(a), t && (r.href = t), a.href = e, a.href;
 }
-const Te = /* @__PURE__ */ (() => {
+const $e = /* @__PURE__ */ (() => {
   let e = 0;
   const t = () => (
     // eslint-disable-next-line no-bitwise
@@ -22,27 +22,27 @@ function B(e) {
     t.push(e[n]);
   return t;
 }
-let G = null;
+let q = null;
 function ye(e = {}) {
-  return G || (e.includeStyleProperties ? (G = e.includeStyleProperties, G) : (G = B(window.getComputedStyle(document.documentElement)), G));
+  return q || (e.includeStyleProperties ? (q = e.includeStyleProperties, q) : (q = B(window.getComputedStyle(document.documentElement)), q));
 }
 function K(e, t) {
   const r = (e.ownerDocument.defaultView || window).getComputedStyle(e).getPropertyValue(t);
   return r ? parseFloat(r.replace("px", "")) : 0;
 }
-function Le(e) {
+function Oe(e) {
   const t = K(e, "border-left-width"), n = K(e, "border-right-width");
   return e.clientWidth + t + n;
 }
-function $e(e) {
+function Ae(e) {
   const t = K(e, "border-top-width"), n = K(e, "border-bottom-width");
   return e.clientHeight + t + n;
 }
 function be(e, t = {}) {
-  const n = t.width || Le(e), r = t.height || $e(e);
+  const n = t.width || Oe(e), r = t.height || Ae(e);
   return { width: n, height: r };
 }
-function Oe() {
+function Fe() {
   let e, t;
   try {
     t = process;
@@ -51,9 +51,9 @@ function Oe() {
   const n = t && t.env ? t.env.devicePixelRatio : null;
   return n && (e = parseInt(n, 10), Number.isNaN(e) && (e = 1)), e || window.devicePixelRatio || 1;
 }
-const D = 16384;
-function Ae(e) {
-  (e.width > D || e.height > D) && (e.width > D && e.height > D ? e.width > e.height ? (e.height *= D / e.width, e.width = D) : (e.width *= D / e.height, e.height = D) : e.width > D ? (e.height *= D / e.width, e.width = D) : (e.width *= D / e.height, e.height = D));
+const _ = 16384;
+function De(e) {
+  (e.width > _ || e.height > _) && (e.width > _ && e.height > _ ? e.width > e.height ? (e.height *= _ / e.width, e.width = _) : (e.width *= _ / e.height, e.height = _) : e.width > _ ? (e.height *= _ / e.width, e.width = _) : (e.width *= _ / e.height, e.height = _));
 }
 function Q(e) {
   return new Promise((t, n) => {
@@ -65,12 +65,12 @@ function Q(e) {
     }, r.onerror = n, r.crossOrigin = "anonymous", r.decoding = "async", r.src = e;
   });
 }
-async function Fe(e) {
+async function _e(e) {
   return Promise.resolve().then(() => new XMLSerializer().serializeToString(e)).then(encodeURIComponent).then((t) => `data:image/svg+xml;charset=utf-8,${t}`);
 }
-async function De(e, t, n) {
+async function Ue(e, t, n) {
   const r = "http://www.w3.org/2000/svg", a = document.createElementNS(r, "svg"), o = document.createElementNS(r, "foreignObject");
-  return a.setAttribute("width", `${t}`), a.setAttribute("height", `${n}`), a.setAttribute("viewBox", `0 0 ${t} ${n}`), o.setAttribute("width", "100%"), o.setAttribute("height", "100%"), o.setAttribute("x", "0"), o.setAttribute("y", "0"), o.setAttribute("externalResourcesRequired", "true"), a.appendChild(o), o.appendChild(e), Fe(a);
+  return a.setAttribute("width", `${t}`), a.setAttribute("height", `${n}`), a.setAttribute("viewBox", `0 0 ${t} ${n}`), o.setAttribute("width", "100%"), o.setAttribute("height", "100%"), o.setAttribute("x", "0"), o.setAttribute("y", "0"), o.setAttribute("externalResourcesRequired", "true"), a.appendChild(o), o.appendChild(e), _e(a);
 }
 const O = (e, t) => {
   if (e instanceof t)
@@ -78,37 +78,37 @@ const O = (e, t) => {
   const n = Object.getPrototypeOf(e);
   return n === null ? !1 : n.constructor.name === t.name || O(n, t);
 };
-function Ue(e) {
+function We(e) {
   const t = e.getPropertyValue("content");
   return `${e.cssText} content: '${t.replace(/'|"/g, "")}';`;
 }
-function _e(e, t) {
+function He(e, t) {
   return ye(t).map((n) => {
     const r = e.getPropertyValue(n), a = e.getPropertyPriority(n);
     return `${n}: ${r}${a ? " !important" : ""};`;
   }).join(" ");
 }
-function We(e, t, n, r) {
-  const a = `.${e}:${t}`, o = n.cssText ? Ue(n) : _e(n, r);
+function Ne(e, t, n, r) {
+  const a = `.${e}:${t}`, o = n.cssText ? We(n) : He(n, r);
   return document.createTextNode(`${a}{${o}}`);
 }
 function de(e, t, n, r) {
   const a = window.getComputedStyle(e, n), o = a.getPropertyValue("content");
   if (o === "" || o === "none")
     return;
-  const i = Te();
+  const i = $e();
   try {
     t.className = `${t.className} ${i}`;
   } catch {
     return;
   }
   const l = document.createElement("style");
-  l.appendChild(We(i, n, a, r)), t.appendChild(l);
+  l.appendChild(Ne(i, n, a, r)), t.appendChild(l);
 }
 function Me(e, t, n) {
   de(e, t, ":before", n), de(e, t, ":after", n);
 }
-const fe = "application/font-woff", me = "image/jpeg", He = {
+const fe = "application/font-woff", me = "image/jpeg", ze = {
   woff: fe,
   woff2: fe,
   ttf: "application/font-truetype",
@@ -121,21 +121,21 @@ const fe = "application/font-woff", me = "image/jpeg", He = {
   svg: "image/svg+xml",
   webp: "image/webp"
 };
-function Ne(e) {
+function Ve(e) {
   const t = /\.([^./]*?)$/g.exec(e);
   return t ? t[1] : "";
 }
 function re(e) {
-  const t = Ne(e).toLowerCase();
-  return He[t] || "";
+  const t = Ve(e).toLowerCase();
+  return ze[t] || "";
 }
-function ze(e) {
+function Be(e) {
   return e.split(/,/)[1];
 }
 function te(e) {
   return e.search(/^(data:)/) !== -1;
 }
-function Ve(e, t) {
+function Ie(e, t) {
   return `data:${t};base64,${e}`;
 }
 async function we(e, t, n) {
@@ -155,19 +155,19 @@ async function we(e, t, n) {
   });
 }
 const ee = {};
-function Be(e, t, n) {
+function je(e, t, n) {
   let r = e.replace(/\?.*/, "");
   return n && (r = e), /ttf|otf|eot|woff2?/i.test(r) && (r = r.replace(/.*\//, "")), t ? `[${t}]${r}` : r;
 }
 async function ne(e, t, n) {
-  const r = Be(e, t, n.includeQueryParams);
+  const r = je(e, t, n.includeQueryParams);
   if (ee[r] != null)
     return ee[r];
   n.cacheBust && (e += (/\?/.test(e) ? "&" : "?") + (/* @__PURE__ */ new Date()).getTime());
   let a;
   try {
-    const o = await we(e, n.fetchRequestInit, ({ res: i, result: l }) => (t || (t = i.headers.get("Content-Type") || ""), ze(l)));
-    a = Ve(o, t);
+    const o = await we(e, n.fetchRequestInit, ({ res: i, result: l }) => (t || (t = i.headers.get("Content-Type") || ""), Be(l)));
+    a = Ie(o, t);
   } catch (o) {
     a = n.imagePlaceholder || "";
     let i = `Failed to fetch resource: ${e}`;
@@ -175,11 +175,11 @@ async function ne(e, t, n) {
   }
   return ee[r] = a, a;
 }
-async function je(e) {
+async function Ge(e) {
   const t = e.toDataURL();
   return t === "data:," ? e.cloneNode(!1) : Q(t);
 }
-async function Ie(e, t) {
+async function qe(e, t) {
   if (e.currentSrc) {
     const o = document.createElement("canvas"), i = o.getContext("2d");
     o.width = e.clientWidth, o.height = e.clientHeight, i == null || i.drawImage(e, 0, 0, o.width, o.height);
@@ -189,7 +189,7 @@ async function Ie(e, t) {
   const n = e.poster, r = re(n), a = await ne(n, r, t);
   return Q(a);
 }
-async function Ge(e, t) {
+async function Je(e, t) {
   var n;
   try {
     if (!((n = e == null ? void 0 : e.contentDocument) === null || n === void 0) && n.body)
@@ -198,20 +198,20 @@ async function Ge(e, t) {
   }
   return e.cloneNode(!1);
 }
-async function qe(e, t) {
-  return O(e, HTMLCanvasElement) ? je(e) : O(e, HTMLVideoElement) ? Ie(e, t) : O(e, HTMLIFrameElement) ? Ge(e, t) : e.cloneNode(ve(e));
+async function Xe(e, t) {
+  return O(e, HTMLCanvasElement) ? Ge(e) : O(e, HTMLVideoElement) ? qe(e, t) : O(e, HTMLIFrameElement) ? Je(e, t) : e.cloneNode(ve(e));
 }
-const Je = (e) => e.tagName != null && e.tagName.toUpperCase() === "SLOT", ve = (e) => e.tagName != null && e.tagName.toUpperCase() === "SVG";
-async function Xe(e, t, n) {
+const Ke = (e) => e.tagName != null && e.tagName.toUpperCase() === "SLOT", ve = (e) => e.tagName != null && e.tagName.toUpperCase() === "SVG";
+async function Qe(e, t, n) {
   var r, a;
   if (ve(t))
     return t;
   let o = [];
-  return Je(e) && e.assignedNodes ? o = B(e.assignedNodes()) : O(e, HTMLIFrameElement) && (!((r = e.contentDocument) === null || r === void 0) && r.body) ? o = B(e.contentDocument.body.childNodes) : o = B(((a = e.shadowRoot) !== null && a !== void 0 ? a : e).childNodes), o.length === 0 || O(e, HTMLVideoElement) || await o.reduce((i, l) => i.then(() => Y(l, n)).then((f) => {
+  return Ke(e) && e.assignedNodes ? o = B(e.assignedNodes()) : O(e, HTMLIFrameElement) && (!((r = e.contentDocument) === null || r === void 0) && r.body) ? o = B(e.contentDocument.body.childNodes) : o = B(((a = e.shadowRoot) !== null && a !== void 0 ? a : e).childNodes), o.length === 0 || O(e, HTMLVideoElement) || await o.reduce((i, l) => i.then(() => Y(l, n)).then((f) => {
     f && t.appendChild(f);
   }), Promise.resolve()), t;
 }
-function Ke(e, t, n) {
+function Ye(e, t, n) {
   const r = t.style;
   if (!r)
     return;
@@ -221,19 +221,19 @@ function Ke(e, t, n) {
     o === "font-size" && i.endsWith("px") && (i = `${Math.floor(parseFloat(i.substring(0, i.length - 2))) - 0.1}px`), O(e, HTMLIFrameElement) && o === "display" && i === "inline" && (i = "block"), o === "d" && t.getAttribute("d") && (i = `path(${t.getAttribute("d")})`), r.setProperty(o, i, a.getPropertyPriority(o));
   });
 }
-function Qe(e, t) {
+function Ze(e, t) {
   O(e, HTMLTextAreaElement) && (t.innerHTML = e.value), O(e, HTMLInputElement) && t.setAttribute("value", e.value);
 }
-function Ye(e, t) {
+function et(e, t) {
   if (O(e, HTMLSelectElement)) {
     const n = t, r = Array.from(n.children).find((a) => e.value === a.getAttribute("value"));
     r && r.setAttribute("selected", "");
   }
 }
-function Ze(e, t, n) {
-  return O(t, Element) && (Ke(e, t, n), Me(e, t, n), Qe(e, t), Ye(e, t)), t;
+function tt(e, t, n) {
+  return O(t, Element) && (Ye(e, t, n), Me(e, t, n), Ze(e, t), et(e, t)), t;
 }
-async function et(e, t) {
+async function rt(e, t) {
   const n = e.querySelectorAll ? e.querySelectorAll("use") : [];
   if (n.length === 0)
     return e;
@@ -241,8 +241,8 @@ async function et(e, t) {
   for (let o = 0; o < n.length; o++) {
     const l = n[o].getAttribute("xlink:href");
     if (l) {
-      const f = e.querySelector(l), U = document.querySelector(l);
-      !f && U && !r[l] && (r[l] = await Y(U, t, !0));
+      const f = e.querySelector(l), A = document.querySelector(l);
+      !f && A && !r[l] && (r[l] = await Y(A, t, !0));
     }
   }
   const a = Object.values(r);
@@ -258,30 +258,30 @@ async function et(e, t) {
   return e;
 }
 async function Y(e, t, n) {
-  return !n && t.filter && !t.filter(e) ? null : Promise.resolve(e).then((r) => qe(r, t)).then((r) => Xe(e, r, t)).then((r) => Ze(e, r, t)).then((r) => et(r, t));
+  return !n && t.filter && !t.filter(e) ? null : Promise.resolve(e).then((r) => Xe(r, t)).then((r) => Qe(e, r, t)).then((r) => tt(e, r, t)).then((r) => rt(r, t));
 }
-const Ee = /url\((['"]?)([^'"]+?)\1\)/g, tt = /url\([^)]+\)\s*format\((["']?)([^"']+)\1\)/g, rt = /src:\s*(?:url\([^)]+\)\s*format\([^)]+\)[,;]\s*)+/g;
-function nt(e) {
+const Ee = /url\((['"]?)([^'"]+?)\1\)/g, nt = /url\([^)]+\)\s*format\((["']?)([^"']+)\1\)/g, at = /src:\s*(?:url\([^)]+\)\s*format\([^)]+\)[,;]\s*)+/g;
+function ot(e) {
   const t = e.replace(/([.*+?^${}()|\[\]\/\\])/g, "\\$1");
   return new RegExp(`(url\\(['"]?)(${t})(['"]?\\))`, "g");
 }
-function at(e) {
+function it(e) {
   const t = [];
   return e.replace(Ee, (n, r, a) => (t.push(a), n)), t.filter((n) => !te(n));
 }
-async function ot(e, t, n, r, a) {
+async function lt(e, t, n, r, a) {
   try {
-    const o = n ? Pe(t, n) : t, i = re(t);
+    const o = n ? Le(t, n) : t, i = re(t);
     let l;
-    return a || (l = await ne(o, i, r)), e.replace(nt(t), `$1${l}$3`);
+    return a || (l = await ne(o, i, r)), e.replace(ot(t), `$1${l}$3`);
   } catch {
   }
   return e;
 }
-function it(e, { preferredFontFormat: t }) {
-  return t ? e.replace(rt, (n) => {
+function ct(e, { preferredFontFormat: t }) {
+  return t ? e.replace(at, (n) => {
     for (; ; ) {
-      const [r, , a] = tt.exec(n) || [];
+      const [r, , a] = nt.exec(n) || [];
       if (!a)
         return "";
       if (a === t)
@@ -295,10 +295,10 @@ function Se(e) {
 async function ke(e, t, n) {
   if (!Se(e))
     return e;
-  const r = it(e, n);
-  return at(r).reduce((o, i) => o.then((l) => ot(l, i, t, n)), Promise.resolve(r));
+  const r = ct(e, n);
+  return it(r).reduce((o, i) => o.then((l) => lt(l, i, t, n)), Promise.resolve(r));
 }
-async function q(e, t, n) {
+async function J(e, t, n) {
   var r;
   const a = (r = t.style) === null || r === void 0 ? void 0 : r.getPropertyValue(e);
   if (a) {
@@ -307,10 +307,10 @@ async function q(e, t, n) {
   }
   return !1;
 }
-async function lt(e, t) {
-  await q("background", e, t) || await q("background-image", e, t), await q("mask", e, t) || await q("-webkit-mask", e, t) || await q("mask-image", e, t) || await q("-webkit-mask-image", e, t);
+async function st(e, t) {
+  await J("background", e, t) || await J("background-image", e, t), await J("mask", e, t) || await J("-webkit-mask", e, t) || await J("mask-image", e, t) || await J("-webkit-mask-image", e, t);
 }
-async function ct(e, t) {
+async function ut(e, t) {
   const n = O(e, HTMLImageElement);
   if (!(n && !te(e.src)) && !(O(e, SVGImageElement) && !te(e.href.baseVal)))
     return;
@@ -319,22 +319,22 @@ async function ct(e, t) {
     e.onload = o, e.onerror = t.onImageErrorHandler ? (...f) => {
       try {
         o(t.onImageErrorHandler(...f));
-      } catch (U) {
-        i(U);
+      } catch (A) {
+        i(A);
       }
     } : i;
     const l = e;
     l.decode && (l.decode = o), l.loading === "lazy" && (l.loading = "eager"), n ? (e.srcset = "", e.src = a) : e.href.baseVal = a;
   });
 }
-async function st(e, t) {
-  const r = B(e.childNodes).map((a) => Ce(a, t));
+async function dt(e, t) {
+  const r = B(e.childNodes).map((a) => Re(a, t));
   await Promise.all(r).then(() => e);
 }
-async function Ce(e, t) {
-  O(e, Element) && (await lt(e, t), await ct(e, t), await st(e, t));
+async function Re(e, t) {
+  O(e, Element) && (await st(e, t), await ut(e, t), await dt(e, t));
 }
-function ut(e, t) {
+function ft(e, t) {
   const { style: n } = e;
   t.backgroundColor && (n.backgroundColor = t.backgroundColor), t.width && (n.width = `${t.width}px`), t.height && (n.height = `${t.height}px`);
   const r = t.style;
@@ -384,7 +384,7 @@ function xe(e) {
   }
   return t;
 }
-async function dt(e, t) {
+async function mt(e, t) {
   const n = [], r = [];
   return e.forEach((a) => {
     if ("cssRules" in a)
@@ -392,19 +392,19 @@ async function dt(e, t) {
         B(a.cssRules || []).forEach((o, i) => {
           if (o.type === CSSRule.IMPORT_RULE) {
             let l = i + 1;
-            const f = o.href, U = pe(f).then((W) => ge(W, t)).then((W) => xe(W).forEach((J) => {
+            const f = o.href, A = pe(f).then((W) => ge(W, t)).then((W) => xe(W).forEach((I) => {
               try {
-                a.insertRule(J, J.startsWith("@import") ? l += 1 : a.cssRules.length);
+                a.insertRule(I, I.startsWith("@import") ? l += 1 : a.cssRules.length);
               } catch (Z) {
                 console.error("Error inserting rule from remote css", {
-                  rule: J,
+                  rule: I,
                   error: Z
                 });
               }
             })).catch((W) => {
               console.error("Error loading remote css", W.toString());
             });
-            r.push(U);
+            r.push(A);
           }
         });
       } catch (o) {
@@ -426,59 +426,59 @@ async function dt(e, t) {
       }
   }), n));
 }
-function ft(e) {
+function ht(e) {
   return e.filter((t) => t.type === CSSRule.FONT_FACE_RULE).filter((t) => Se(t.style.getPropertyValue("src")));
 }
-async function mt(e, t) {
+async function pt(e, t) {
   if (e.ownerDocument == null)
     throw new Error("Provided element is not within a Document");
-  const n = B(e.ownerDocument.styleSheets), r = await dt(n, t);
-  return ft(r);
+  const n = B(e.ownerDocument.styleSheets), r = await mt(n, t);
+  return ht(r);
 }
-function Re(e) {
+function Ce(e) {
   return e.trim().replace(/["']/g, "");
 }
-function ht(e) {
+function gt(e) {
   const t = /* @__PURE__ */ new Set();
   function n(r) {
     (r.style.fontFamily || getComputedStyle(r).fontFamily).split(",").forEach((o) => {
-      t.add(Re(o));
+      t.add(Ce(o));
     }), Array.from(r.children).forEach((o) => {
       o instanceof HTMLElement && n(o);
     });
   }
   return n(e), t;
 }
-async function pt(e, t) {
-  const n = await mt(e, t), r = ht(e);
-  return (await Promise.all(n.filter((o) => r.has(Re(o.style.fontFamily))).map((o) => {
+async function xt(e, t) {
+  const n = await pt(e, t), r = gt(e);
+  return (await Promise.all(n.filter((o) => r.has(Ce(o.style.fontFamily))).map((o) => {
     const i = o.parentStyleSheet ? o.parentStyleSheet.href : null;
     return ke(o.cssText, i, t);
   }))).join(`
 `);
 }
-async function gt(e, t) {
-  const n = t.fontEmbedCSS != null ? t.fontEmbedCSS : t.skipFonts ? null : await pt(e, t);
+async function yt(e, t) {
+  const n = t.fontEmbedCSS != null ? t.fontEmbedCSS : t.skipFonts ? null : await xt(e, t);
   if (n) {
     const r = document.createElement("style"), a = document.createTextNode(n);
     r.appendChild(a), e.firstChild ? e.insertBefore(r, e.firstChild) : e.appendChild(r);
   }
 }
-async function xt(e, t = {}) {
-  const { width: n, height: r } = be(e, t), a = await Y(e, t, !0);
-  return await gt(a, t), await Ce(a, t), ut(a, t), await De(a, n, r);
-}
-async function yt(e, t = {}) {
-  const { width: n, height: r } = be(e, t), a = await xt(e, t), o = await Q(a), i = document.createElement("canvas"), l = i.getContext("2d"), f = t.pixelRatio || Oe(), U = t.canvasWidth || n, W = t.canvasHeight || r;
-  return i.width = U * f, i.height = W * f, t.skipAutoScale || Ae(i), i.style.width = `${U}`, i.style.height = `${W}`, t.backgroundColor && (l.fillStyle = t.backgroundColor, l.fillRect(0, 0, i.width, i.height)), l.drawImage(o, 0, 0, i.width, i.height), i;
-}
 async function bt(e, t = {}) {
-  return (await yt(e, t)).toDataURL();
+  const { width: n, height: r } = be(e, t), a = await Y(e, t, !0);
+  return await yt(a, t), await Re(a, t), ft(a, t), await Ue(a, n, r);
 }
-function wt(e) {
+async function wt(e, t = {}) {
+  const { width: n, height: r } = be(e, t), a = await bt(e, t), o = await Q(a), i = document.createElement("canvas"), l = i.getContext("2d"), f = t.pixelRatio || Fe(), A = t.canvasWidth || n, W = t.canvasHeight || r;
+  return i.width = A * f, i.height = W * f, t.skipAutoScale || De(i), i.style.width = `${A}`, i.style.height = `${W}`, t.backgroundColor && (l.fillStyle = t.backgroundColor, l.fillRect(0, 0, i.width, i.height)), l.drawImage(o, 0, 0, i.width, i.height), i;
+}
+async function vt(e, t = {}) {
+  return (await wt(e, t)).toDataURL();
+}
+function Et(e) {
   var ae;
-  const { useState: t, useRef: n, useCallback: r, useEffect: a } = e.React;
-  function o() {
+  const { useState: t, useRef: n, useCallback: r, useEffect: a } = e.React, o = 1280, i = 832;
+  function l() {
     const [c, E] = t([]), [b, S] = t(!1), p = n(null), h = r((s, x) => {
       var k;
       (k = window.__awOpenAppWindow) == null || k.call(window, "presentations.viewer", s, x);
@@ -492,10 +492,10 @@ function wt(e) {
       let s, x, k = !1;
       const P = () => {
         try {
-          s = new WebSocket(e.app.wsUrl("/ws")), s.onmessage = (C) => {
+          s = new WebSocket(e.app.wsUrl("/ws")), s.onmessage = (R) => {
             let m;
             try {
-              m = JSON.parse(C.data);
+              m = JSON.parse(R.data);
             } catch {
               return;
             }
@@ -532,16 +532,16 @@ function wt(e) {
         }
       };
     }, [h]);
-    const A = r(() => {
+    const F = r(() => {
       clearTimeout(p.current), S(!0);
-    }, []), R = r(() => {
+    }, []), C = r(() => {
       clearTimeout(p.current), p.current = setTimeout(() => S(!1), 150);
     }, []);
     a(() => () => clearTimeout(p.current), []);
     const $ = r(async (s) => {
       await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${s}`), { method: "DELETE" });
     }, []), w = [...c].sort((s, x) => (x.created_at || 0) - (s.created_at || 0));
-    return /* @__PURE__ */ e.h("div", { className: "relative", onMouseEnter: A, onMouseLeave: R }, /* @__PURE__ */ e.h(
+    return /* @__PURE__ */ e.h("div", { className: "relative", onMouseEnter: F, onMouseLeave: C }, /* @__PURE__ */ e.h(
       "button",
       {
         onClick: () => S((s) => !s),
@@ -562,7 +562,7 @@ function wt(e) {
           style: { gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", maxHeight: "70vh" }
         },
         w.map((s) => /* @__PURE__ */ e.h(
-          i,
+          f,
           {
             key: s.id,
             presentation: s,
@@ -575,15 +575,15 @@ function wt(e) {
       ))
     ));
   }
-  function i({ presentation: c, onClick: E, onDelete: b }) {
-    const S = n(null), [p, h] = t(0.16), A = 1e3, R = 650, $ = R / A;
+  function f({ presentation: c, onClick: E, onDelete: b }) {
+    const S = n(null), [p, h] = t(0.16), F = o, C = i, $ = C / F;
     a(() => {
       const s = S.current;
       if (!s || typeof ResizeObserver > "u") return;
       const x = new ResizeObserver((k) => {
         for (const P of k) {
-          const C = P.contentRect.width;
-          C > 0 && h(C / A);
+          const R = P.contentRect.width;
+          R > 0 && h(R / F);
         }
       });
       return x.observe(s), () => x.disconnect();
@@ -614,8 +614,8 @@ function wt(e) {
               position: "absolute",
               top: 0,
               left: 0,
-              width: A,
-              height: R,
+              width: F,
+              height: C,
               border: 0,
               pointerEvents: "none",
               transform: `scale(${p})`,
@@ -654,9 +654,9 @@ function wt(e) {
       )
     );
   }
-  const l = /* @__PURE__ */ new Map(), f = 640;
-  function U(c, E, { onClose: b, onTitleChange: S } = {}) {
-    const [p, h] = t(null), [A, R] = t(!1), [$, w] = t(null), [s, x] = t(!1), [k, P] = t(!1), [C, m] = t(null), T = r(async () => {
+  const A = /* @__PURE__ */ new Map(), W = 640;
+  function I(c, E, { onClose: b, onTitleChange: S } = {}) {
+    const [p, h] = t(null), [F, C] = t(!1), [$, w] = t(null), [s, x] = t(!1), [k, P] = t(!1), [R, m] = t(null), T = r(async () => {
       if (c)
         try {
           const d = await (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`))).json();
@@ -669,28 +669,28 @@ function wt(e) {
       T();
     }, [T]), a(() => {
       const y = (d) => {
-        var _;
+        var U;
         const u = d.detail;
-        !u || u.type !== "presentation_update" || (u.action === "delete" && u.id === c ? b == null || b() : (u.action === "update" || u.action === "create") && ((_ = u.presentation) == null ? void 0 : _.id) === c && h(u.presentation));
+        !u || u.type !== "presentation_update" || (u.action === "delete" && u.id === c ? b == null || b() : (u.action === "update" || u.action === "create") && ((U = u.presentation) == null ? void 0 : U.id) === c && h(u.presentation));
       };
       return window.addEventListener("aw-presentation-update", y), () => window.removeEventListener("aw-presentation-update", y);
     }, [c, b]);
-    const g = c ? e.app.absoluteApiUrl(`/presentations/${c}/html`) : null, M = r((y) => {
+    const g = c ? e.app.absoluteApiUrl(`/presentations/${c}/html`) : null, H = r((y) => {
       const d = document.createElement("a");
       d.download = `${((p == null ? void 0 : p.title) || "presentation").replace(/[^a-zA-Z0-9_-]/g, "_")}.png`, d.href = y, d.click();
     }, [p == null ? void 0 : p.title]), j = r(async () => {
       var y;
       m(null), P(!0);
       try {
-        const d = (y = l.get(E)) == null ? void 0 : y.contentDocument;
+        const d = (y = A.get(E)) == null ? void 0 : y.contentDocument;
         if (d && d.body) {
-          const u = await bt(d.documentElement, {
+          const u = await vt(d.documentElement, {
             backgroundColor: "#111318",
             pixelRatio: 2,
             width: d.documentElement.scrollWidth,
             height: d.documentElement.scrollHeight
           });
-          M(u);
+          H(u);
           return;
         }
         throw new Error("presentation content is not accessible from this window (cross-origin iframe)");
@@ -701,33 +701,33 @@ function wt(e) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({})
-          }), _ = await u.json().catch(() => null);
-          if (!u.ok || !(_ != null && _.data_url))
-            throw new Error((_ == null ? void 0 : _.detail) || `export failed (${u.status})`);
-          M(_.data_url);
+          }), U = await u.json().catch(() => null);
+          if (!u.ok || !(U != null && U.data_url))
+            throw new Error((U == null ? void 0 : U.detail) || `export failed (${u.status})`);
+          H(U.data_url);
         } catch (u) {
           console.error("Export failed:", u), m(u.message || "Export failed");
         }
       } finally {
         P(!1);
       }
-    }, [c, M, E]), v = r((y) => {
+    }, [c, H, E]), v = r((y) => {
       var d;
       if (S) {
         S(y);
         return;
       }
       (d = window.__awOpenAppWindow) == null || d.call(window, "presentations.viewer", c, y);
-    }, [S, c]), H = r(async (y) => {
+    }, [S, c]), N = r(async (y) => {
       const d = (y || "").trim();
       !d || d === (p == null ? void 0 : p.title) || (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: d })
       }), h((u) => u && { ...u, title: d }), v(d));
-    }, [p == null ? void 0 : p.title, c, v]), F = r(async (y) => {
+    }, [p == null ? void 0 : p.title, c, v]), D = r(async (y) => {
       if (c) {
-        R(!0), w(null);
+        C(!0), w(null);
         try {
           const u = await (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}/share`), {
             method: "POST",
@@ -738,10 +738,10 @@ function wt(e) {
         } catch (d) {
           console.error("Share failed:", d);
         } finally {
-          R(!1);
+          C(!1);
         }
       }
-    }, [c, g]), N = r(() => {
+    }, [c, g]), M = r(() => {
       var y;
       $ && ((y = navigator.clipboard) == null || y.writeText($).then(() => {
         x(!0), setTimeout(() => x(!1), 2e3);
@@ -749,7 +749,7 @@ function wt(e) {
       }));
     }, [$]), X = r(async () => {
       await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`), { method: "DELETE" }), b == null || b();
-    }, [c, b]), I = r(({ asTab: y = !1 } = {}) => {
+    }, [c, b]), G = r(({ asTab: y = !1 } = {}) => {
       if (g) {
         if (y) {
           window.open(g, "_blank");
@@ -763,64 +763,64 @@ function wt(e) {
       htmlUrl: g,
       shareLink: $,
       setShareLink: w,
-      shareLoading: A,
+      shareLoading: F,
       shareCopied: s,
-      handleCreateShare: F,
-      handleCopy: N,
+      handleCreateShare: D,
+      handleCopy: M,
       exportLoading: k,
-      exportError: C,
+      exportError: R,
       setExportError: m,
       handleExport: j,
-      commitRename: H,
+      commitRename: N,
       handleDelete: X,
-      popOut: I
+      popOut: G
     };
   }
-  function W({ windowKey: c, instanceId: E, onClose: b, onTitleChange: S }) {
+  function Z({ windowKey: c, instanceId: E, onClose: b, onTitleChange: S }) {
     const p = E, {
       presentation: h,
-      htmlUrl: A,
-      shareLink: R,
+      htmlUrl: F,
+      shareLink: C,
       setShareLink: $,
       shareLoading: w,
       shareCopied: s,
       handleCreateShare: x,
       handleCopy: k,
       exportLoading: P,
-      exportError: C,
+      exportError: R,
       setExportError: m,
       handleExport: T,
       commitRename: g,
-      handleDelete: M,
+      handleDelete: H,
       popOut: j
-    } = U(p, c, { onClose: b, onTitleChange: S }), [v, H] = t(!1), [F, N] = t(""), [X, I] = t(!1);
+    } = I(p, c, { onClose: b, onTitleChange: S }), [v, N] = t(!1), [D, M] = t(""), [X, G] = t(!1);
     a(() => {
-      v || N((h == null ? void 0 : h.title) || "");
+      v || M((h == null ? void 0 : h.title) || "");
     }, [h == null ? void 0 : h.title, v]);
-    const y = n(null), d = n(null), [u, _] = t(null), oe = r((L) => {
+    const y = n(null), d = n(null), [u, U] = t(null), oe = r((L) => {
       var V;
       const z = (V = L.current) == null ? void 0 : V.getBoundingClientRect();
-      z && _({ top: z.bottom + 6, right: window.innerWidth - z.right });
+      z && U({ top: z.bottom + 6, right: window.innerWidth - z.right });
     }, []), ie = r(() => {
-      H(!1), g(F);
-    }, [g, F]);
+      N(!1), g(D);
+    }, [g, D]);
     return a(() => {
-      if (!v && !X && !C) return;
+      if (!v && !X && !R) return;
       const L = (V) => {
         var le, ce, se, ue;
-        (le = y.current) != null && le.contains(V.target) || (ce = d.current) != null && ce.contains(V.target) || (ue = (se = V.target).closest) != null && ue.call(se, "[data-pres-popover]") || (H(!1), I(!1), m(null));
+        (le = y.current) != null && le.contains(V.target) || (ce = d.current) != null && ce.contains(V.target) || (ue = (se = V.target).closest) != null && ue.call(se, "[data-pres-popover]") || (N(!1), G(!1), m(null));
       }, z = (V) => {
-        V.key === "Escape" && (H(!1), I(!1), m(null));
+        V.key === "Escape" && (N(!1), G(!1), m(null));
       };
       return document.addEventListener("mousedown", L), document.addEventListener("keydown", z), () => {
         document.removeEventListener("mousedown", L), document.removeEventListener("keydown", z);
       };
-    }, [v, X, C, m]), /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h(
+    }, [v, X, R, m]), /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h(
       "button",
       {
         ref: y,
         onClick: () => {
-          I(!1), H((L) => L ? !1 : (N((h == null ? void 0 : h.title) || ""), oe(y), !0));
+          G(!1), N((L) => L ? !1 : (M((h == null ? void 0 : h.title) || ""), oe(y), !0));
         },
         className: "p-1 rounded hover:bg-white/10 text-[var(--color-text-muted)]",
         title: "Rename presentation"
@@ -831,7 +831,7 @@ function wt(e) {
       {
         ref: d,
         onClick: () => {
-          H(!1), $(null), setShareCopied(!1), I((L) => L ? !1 : (oe(d), !0));
+          N(!1), $(null), setShareCopied(!1), G((L) => L ? !1 : (oe(d), !0));
         },
         className: "p-1 rounded hover:bg-white/10 text-[var(--color-text-muted)]",
         title: "Share presentation"
@@ -850,14 +850,14 @@ function wt(e) {
       {
         onClick: T,
         disabled: P,
-        className: `p-1 rounded ${P ? "opacity-50 cursor-wait" : "hover:bg-white/10 cursor-pointer"} ${C ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]"}`,
-        title: C ? `Export failed: ${C}` : "Export as PNG"
+        className: `p-1 rounded ${P ? "opacity-50 cursor-wait" : "hover:bg-white/10 cursor-pointer"} ${R ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]"}`,
+        title: R ? `Export failed: ${R}` : "Export as PNG"
       },
       /* @__PURE__ */ e.h("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("path", { d: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" }), /* @__PURE__ */ e.h("polyline", { points: "7 10 12 15 17 10" }), /* @__PURE__ */ e.h("line", { x1: "12", y1: "15", x2: "12", y2: "3" }))
     ), /* @__PURE__ */ e.h(
       "button",
       {
-        onClick: M,
+        onClick: H,
         className: "p-1 rounded hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]",
         title: "Delete presentation"
       },
@@ -875,10 +875,10 @@ function wt(e) {
           "input",
           {
             autoFocus: !0,
-            value: F,
-            onChange: (L) => N(L.target.value),
+            value: D,
+            onChange: (L) => M(L.target.value),
             onKeyDown: (L) => {
-              L.key === "Enter" && ie(), L.key === "Escape" && (H(!1), N((h == null ? void 0 : h.title) || ""));
+              L.key === "Enter" && ie(), L.key === "Escape" && (N(!1), M((h == null ? void 0 : h.title) || ""));
             },
             className: "w-full text-[11px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
           }
@@ -887,7 +887,7 @@ function wt(e) {
           "button",
           {
             onClick: ie,
-            disabled: !F.trim(),
+            disabled: !D.trim(),
             className: "text-[11px] px-2 py-1 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors disabled:opacity-40"
           },
           "Rename"
@@ -903,7 +903,7 @@ function wt(e) {
           style: { top: u.top, right: u.right, minWidth: 260 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] mb-2" }, "Share presentation"),
-        w ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : R ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: R }, R), /* @__PURE__ */ e.h("button", { onClick: k, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, s ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => $(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: L, value: z }) => /* @__PURE__ */ e.h(
+        w ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : C ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: C }, C), /* @__PURE__ */ e.h("button", { onClick: k, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, s ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => $(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: L, value: z }) => /* @__PURE__ */ e.h(
           "button",
           {
             key: L,
@@ -914,7 +914,7 @@ function wt(e) {
         )))
       ),
       document.body
-    ), C && u && e.ReactDOM.createPortal(
+    ), R && u && e.ReactDOM.createPortal(
       // The `title` attribute never surfaces on touch devices (iOS Safari
       // shows no hover tooltip on tap), so a red icon with no visible
       // reason reads as "broken, does nothing" — this makes it tappable.
@@ -926,7 +926,7 @@ function wt(e) {
           style: { top: u.top, right: u.right, minWidth: 220, maxWidth: 280 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-danger)] mb-1" }, "Export failed"),
-        /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-2" }, C),
+        /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-2" }, R),
         /* @__PURE__ */ e.h(
           "button",
           {
@@ -939,23 +939,23 @@ function wt(e) {
       document.body
     ));
   }
-  function J({ actions: c, onDismiss: E }) {
+  function Pe({ actions: c, onDismiss: E }) {
     const {
       presentation: b,
       shareLink: S,
       setShareLink: p,
       shareLoading: h,
-      shareCopied: A,
-      handleCreateShare: R,
+      shareCopied: F,
+      handleCreateShare: C,
       handleCopy: $,
       exportLoading: w,
       exportError: s,
       setExportError: x,
       handleExport: k,
       commitRename: P,
-      handleDelete: C,
+      handleDelete: R,
       popOut: m
-    } = c, [T, g] = t("menu"), [M, j] = t((b == null ? void 0 : b.title) || ""), v = {
+    } = c, [T, g] = t("menu"), [H, j] = t((b == null ? void 0 : b.title) || ""), v = {
       display: "flex",
       alignItems: "center",
       gap: 12,
@@ -968,7 +968,7 @@ function wt(e) {
       fontSize: 14,
       textAlign: "left",
       cursor: "pointer"
-    }, H = {
+    }, N = {
       position: "absolute",
       left: 0,
       right: 0,
@@ -989,7 +989,7 @@ function wt(e) {
         onClick: E,
         style: { position: "absolute", inset: 0, zIndex: 19, background: "rgba(0,0,0,0.45)" }
       }
-    ), /* @__PURE__ */ e.h("div", { style: H, role: "menu" }, T === "menu" && /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("button", { style: v, onClick: () => {
+    ), /* @__PURE__ */ e.h("div", { style: N, role: "menu" }, T === "menu" && /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("button", { style: v, onClick: () => {
       p(null), g("share");
     } }, "Share"), /* @__PURE__ */ e.h(
       "button",
@@ -1008,7 +1008,7 @@ function wt(e) {
       {
         style: { ...v, color: "var(--color-danger)" },
         onClick: () => {
-          C(), E();
+          R(), E();
         }
       },
       "Delete"
@@ -1028,14 +1028,14 @@ function wt(e) {
       borderRadius: 6,
       padding: 8,
       color: "var(--color-text-primary)"
-    } }, S), /* @__PURE__ */ e.h("button", { style: { ...v, padding: 0, color: "var(--color-accent)" }, onClick: $ }, A ? "✓ Copied" : "Copy link")) : [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: F, value: N }) => /* @__PURE__ */ e.h("button", { key: F, style: { ...v, padding: 0 }, onClick: () => R(N) }, F)), /* @__PURE__ */ e.h("button", { style: { ...v, padding: 0, color: "var(--color-text-muted)" }, onClick: () => g("menu") }, "← Back")), T === "rename" && /* @__PURE__ */ e.h("div", { style: { padding: "8px 16px 4px" } }, /* @__PURE__ */ e.h("div", { style: { fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 } }, "Rename presentation"), /* @__PURE__ */ e.h(
+    } }, S), /* @__PURE__ */ e.h("button", { style: { ...v, padding: 0, color: "var(--color-accent)" }, onClick: $ }, F ? "✓ Copied" : "Copy link")) : [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: D, value: M }) => /* @__PURE__ */ e.h("button", { key: D, style: { ...v, padding: 0 }, onClick: () => C(M) }, D)), /* @__PURE__ */ e.h("button", { style: { ...v, padding: 0, color: "var(--color-text-muted)" }, onClick: () => g("menu") }, "← Back")), T === "rename" && /* @__PURE__ */ e.h("div", { style: { padding: "8px 16px 4px" } }, /* @__PURE__ */ e.h("div", { style: { fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 } }, "Rename presentation"), /* @__PURE__ */ e.h(
       "input",
       {
         autoFocus: !0,
-        value: M,
-        onChange: (F) => j(F.target.value),
-        onKeyDown: (F) => {
-          F.key === "Enter" && (P(M), E());
+        value: H,
+        onChange: (D) => j(D.target.value),
+        onKeyDown: (D) => {
+          D.key === "Enter" && (P(H), E());
         },
         style: {
           // 16px, not smaller: iOS Safari zooms the whole page in on
@@ -1055,29 +1055,29 @@ function wt(e) {
       "button",
       {
         style: { ...v, color: "var(--color-accent)", justifyContent: "flex-end" },
-        disabled: !M.trim(),
+        disabled: !H.trim(),
         onClick: () => {
-          P(M), E();
+          P(H), E();
         }
       },
       "Rename"
     )))));
   }
-  function Z({ windowKey: c, instanceId: E, onClose: b, onTitleChange: S }) {
-    const p = E, h = n(null), A = n(null), [R, $] = t(!1), [w, s] = t(!1), x = U(p, c, { onClose: b, onTitleChange: S }), { htmlUrl: k } = x;
+  function Te({ windowKey: c, instanceId: E, onClose: b, onTitleChange: S }) {
+    const p = E, h = n(null), F = n(null), [C, $] = t(!1), [w, s] = t(!1), x = I(p, c, { onClose: b, onTitleChange: S }), { htmlUrl: k } = x;
     return a(() => {
-      const P = A.current;
+      const P = F.current;
       if (!P || typeof ResizeObserver > "u") return;
-      const C = new ResizeObserver((m) => {
+      const R = new ResizeObserver((m) => {
         for (const T of m) {
           const g = T.contentRect.width;
-          g > 0 && $(g < f);
+          g > 0 && $(g < W);
         }
       });
-      return C.observe(P), () => C.disconnect();
+      return R.observe(P), () => R.disconnect();
     }, []), a(() => {
-      R || s(!1);
-    }, [R]), a(() => (l.set(c, h.current), () => l.delete(c)), [c]), /* @__PURE__ */ e.h("div", { ref: A, className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex-1 relative" }, k && /* @__PURE__ */ e.h("iframe", { ref: h, src: k, className: "absolute inset-0 w-full h-full bg-white border-0", title: "Presentation" }), R && !w && /* @__PURE__ */ e.h(
+      C || s(!1);
+    }, [C]), a(() => (A.set(c, h.current), () => A.delete(c)), [c]), /* @__PURE__ */ e.h("div", { ref: F, className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex-1 relative" }, k && /* @__PURE__ */ e.h("iframe", { ref: h, src: k, className: "absolute inset-0 w-full h-full bg-white border-0", title: "Presentation" }), C && !w && /* @__PURE__ */ e.h(
       "button",
       {
         onClick: () => s(!0),
@@ -1101,11 +1101,11 @@ function wt(e) {
         }
       },
       /* @__PURE__ */ e.h("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "currentColor" }, /* @__PURE__ */ e.h("circle", { cx: "12", cy: "5", r: "2" }), /* @__PURE__ */ e.h("circle", { cx: "12", cy: "12", r: "2" }), /* @__PURE__ */ e.h("circle", { cx: "12", cy: "19", r: "2" }))
-    ), R && w && /* @__PURE__ */ e.h(J, { actions: x, onDismiss: () => s(!1) })));
+    ), C && w && /* @__PURE__ */ e.h(Pe, { actions: x, onDismiss: () => s(!1) })));
   }
-  e.registerSlot("core.nav", o), e.registerWindow("presentations.viewer", Z), (ae = e.registerWindowActions) == null || ae.call(e, "presentations.viewer", W);
+  e.registerSlot("core.nav", l), e.registerWindow("presentations.viewer", Te), (ae = e.registerWindowActions) == null || ae.call(e, "presentations.viewer", Z);
 }
 export {
-  wt as default,
-  wt as register
+  Et as default,
+  Et as register
 };
