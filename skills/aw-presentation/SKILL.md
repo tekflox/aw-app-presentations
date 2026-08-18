@@ -48,31 +48,47 @@ create_presentation(
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px; background: #0d1117; color: #c9d1d9; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0;
+         padding: clamp(12px, 4vw, 24px); background: #0d1117; color: #c9d1d9;
+         overflow-wrap: anywhere; }
   .header { border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 24px; }
-  .header h1 { color: #58a6ff; margin: 0 0 8px; }
+  .header h1 { color: #58a6ff; margin: 0 0 8px; font-size: clamp(20px, 5vw, 30px); }
   .header .subtitle { color: #8b949e; }
   .section { margin-bottom: 32px; }
-  .section h2 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 12px 0; }
+  .section h2 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 8px;
+                font-size: clamp(16px, 4vw, 22px); }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+          padding: clamp(12px, 3vw, 16px); margin: 12px 0; }
   .card h3 { color: #f0f6fc; margin-top: 0; }
+  /* Fluid card/metric rows — auto-fit is what makes them reflow on a phone. */
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .metrics { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  .metric { text-align: center; }
+  .metric .value { font-size: clamp(20px, 6vw, 28px); font-weight: 700; color: #f0f6fc; }
+  .metric .label { font-size: 12px; color: #8b949e; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
   .badge-green { background: #1b4332; color: #2dd4bf; }
   .badge-yellow { background: #3d2e00; color: #f0c000; }
   .badge-red { background: #3d0000; color: #f87171; }
   .badge-blue { background: #0c2d48; color: #58a6ff; }
+  /* Tables MUST be wrapped: <div class="table-wrap"><table>…</table></div> */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 12px 0; }
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #21262d; }
   th { color: #8b949e; font-weight: 600; }
   code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; overflow-x: auto; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+        padding: 16px; overflow-x: auto; max-width: 100%; }
+  img, svg, canvas { max-width: 100%; height: auto; }
   .finding { border-left: 3px solid #58a6ff; padding-left: 12px; margin: 12px 0; }
   .finding.critical { border-color: #f87171; }
   .finding.warning { border-color: #f0c000; }
   .finding.success { border-color: #2dd4bf; }
-  .metric { display: inline-block; text-align: center; margin: 0 24px 12px 0; }
-  .metric .value { font-size: 28px; font-weight: 700; color: #f0f6fc; }
-  .metric .label { font-size: 12px; color: #8b949e; }
+  @media (max-width: 640px) {
+    .header { margin-bottom: 16px; }
+    .section { margin-bottom: 20px; }
+  }
 </style>
 </head>
 <body>
@@ -84,6 +100,25 @@ create_presentation(
 </body>
 </html>
 ```
+
+**Responsive rules — a presentation is read on a phone as often as on a desktop.**
+
+1. Never set a fixed `width` in px on a container. Use `%`, `fr`, `clamp()` or
+   let it be auto.
+2. Multi-column layouts use `grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))`,
+   never `repeat(3, 1fr)`. `auto-fit` collapses to one column on a phone by itself.
+3. Wrap every `<table>` in `<div class="table-wrap">`. A table is the single
+   most common thing that pushes a report wider than the screen.
+4. Rows of items (metrics, badges, cards) go in a flex container with
+   `flex-wrap: wrap`. If you set `min-width` on the items, keep it under 140px.
+5. Nothing important may depend on `:hover` — there is no hover on a touch screen.
+6. Verify mentally at 390px wide (iPhone). If anything would need horizontal
+   panning to read, it is wrong.
+
+The server injects a narrow-screen safety net into every presentation it
+serves, but that net only *relaxes* implicit constraints — it cannot undo a
+`repeat(4, 1fr)` grid or an explicit `min-width`. Getting it right here is
+what actually makes the page readable on a phone.
 
 Common patterns: log analysis (metrics at top, findings as cards), architecture (CSS/SVG boxes + dependency tables), debugging (stack traces in `pre`, timeline of events), performance (badges, before/after tables), planning (numbered steps, file lists, trade-off cards).
 
@@ -177,7 +212,9 @@ Use `ttl_hours=0` for dashboards or reports the user will revisit. Use the defau
 
 ## Tips
 
-- Always use the dark theme (background: #0d1117) — it matches the AW UI
+- Always use the dark theme (background: `#0d1117`) — it matches the AW UI.
+  Dark + a layout that overflows a phone reads as a *blank black screen*, not
+  as a broken layout, so the responsive rules above are not optional cosmetics
 - For code reviews, read the file first to get accurate line numbers
 - A "what did you do" request should combine THIS skill (summary presentation) with `aw-diff-tool`'s `show_diff` (the actual code changes) — two separate tool calls, two separate apps
 - Keep presentation titles short — they appear as window titles in the dashboard
