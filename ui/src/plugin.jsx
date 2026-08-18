@@ -277,32 +277,25 @@ export function register(host) {
   // entry per open presentation — this window is multi-instance).
   const iframesByWindow = new Map();
 
-  function PresentationWindowActions({ windowKey, instanceId, onClose, onTitleChange }) {
-    const presentationId = instanceId;
+  // The narrow-screen breakpoint. Same 640px the server-side fallback net
+  // (presentations_app/normalize.py), the authoring template
+  // (skills/aw-presentation/SKILL.md) and commented_file.py's CSS use.
+  const NARROW_WIDTH = 640;
+
+  // Every action this app offers on a presentation, in ONE place.
+  //
+  // They are rendered from two: the host title bar (PresentationWindowActions)
+  // and — because the mobile workspace shell renders the body slot but never
+  // the titlebar slot, leaving a phone user with no Share/Export/Rename/
+  // Pop-out/Delete at all — a narrow-screen sheet owned by the body. Two
+  // copies of the export fallback chain would drift, so there is one.
+  function usePresentationActions(presentationId, windowKey, { onClose, onTitleChange } = {}) {
     const [presentation, setPresentation] = useState(null);
-
-    const [renameOpen, setRenameOpen] = useState(false);
-    const [editTitle, setEditTitle] = useState('');
-
-    const [shareOpen, setShareOpen] = useState(false);
     const [shareLoading, setShareLoading] = useState(false);
     const [shareLink, setShareLink] = useState(null);
     const [shareCopied, setShareCopied] = useState(false);
-
     const [exportLoading, setExportLoading] = useState(false);
     const [exportError, setExportError] = useState(null);
-
-    // BasicWindow's root is overflow-hidden (rounded corners), so an
-    // `absolute` popover anchored in the header is clipped. Every popover
-    // here portals to document.body with fixed coords from its button.
-    const renameBtnRef = useRef(null);
-    const shareBtnRef = useRef(null);
-    const [anchor, setAnchor] = useState(null);
-
-    const anchorTo = useCallback((ref) => {
-      const r = ref.current?.getBoundingClientRect();
-      if (r) setAnchor({ top: r.bottom + 6, right: window.innerWidth - r.right });
-    }, []);
 
     const load = useCallback(async () => {
       if (!presentationId) return;
@@ -311,7 +304,6 @@ export function register(host) {
         const data = await r.json();
         if (data?.success === false) return;
         setPresentation(data);
-        setEditTitle(data.title || '');
       } catch {}
     }, [presentationId]);
 
@@ -327,38 +319,11 @@ export function register(host) {
           onClose?.();
         } else if ((msg.action === 'update' || msg.action === 'create') && msg.presentation?.id === presentationId) {
           setPresentation(msg.presentation);
-          if (!renameOpen) setEditTitle(msg.presentation.title || '');
         }
       };
       window.addEventListener('aw-presentation-update', handler);
       return () => window.removeEventListener('aw-presentation-update', handler);
-    }, [presentationId, onClose, renameOpen]);
-
-    // Dismiss any open popover on outside click / Escape — portalled content
-    // sits outside this window's DOM subtree, so nothing else dismisses it.
-    useEffect(() => {
-      if (!renameOpen && !shareOpen && !exportError) return undefined;
-      const onDown = (e) => {
-        if (renameBtnRef.current?.contains(e.target)) return;
-        if (shareBtnRef.current?.contains(e.target)) return;
-        if (e.target.closest?.('[data-pres-popover]')) return;
-        setRenameOpen(false);
-        setShareOpen(false);
-        setExportError(null);
-      };
-      const onKey = (e) => {
-        if (e.key !== 'Escape') return;
-        setRenameOpen(false);
-        setShareOpen(false);
-        setExportError(null);
-      };
-      document.addEventListener('mousedown', onDown);
-      document.addEventListener('keydown', onKey);
-      return () => {
-        document.removeEventListener('mousedown', onDown);
-        document.removeEventListener('keydown', onKey);
-      };
-    }, [renameOpen, shareOpen, exportError]);
+    }, [presentationId, onClose]);
 
     // Absolute URL required — <iframe src> and window.open() are resolved
     // directly by the browser, bypassing the fetch/XHR-only apiBase.js
@@ -427,9 +392,8 @@ export function register(host) {
       window.__awOpenAppWindow?.('presentations.viewer', presentationId, title);
     }, [onTitleChange, presentationId]);
 
-    const commitRename = useCallback(async () => {
-      setRenameOpen(false);
-      const title = editTitle.trim();
+    const commitRename = useCallback(async (rawTitle) => {
+      const title = (rawTitle || '').trim();
       if (!title || title === presentation?.title) return;
       await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${presentationId}`), {
         method: 'PUT',
@@ -438,7 +402,7 @@ export function register(host) {
       });
       setPresentation((prev) => (prev ? { ...prev, title } : prev));
       applyTitle(title);
-    }, [editTitle, presentation?.title, presentationId, applyTitle]);
+    }, [presentation?.title, presentationId, applyTitle]);
 
     const handleCreateShare = useCallback(async (expiresIn) => {
       if (!presentationId) return;
@@ -473,6 +437,85 @@ export function register(host) {
       await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${presentationId}`), { method: 'DELETE' });
       onClose?.();
     }, [presentationId, onClose]);
+
+    // On mobile Safari, window.open() with a feature string is ignored and
+    // opens a full tab anyway — so the sheet asks for a tab outright rather
+    // than a popup that will not be one.
+    const popOut = useCallback(({ asTab = false } = {}) => {
+      if (!htmlUrl) return;
+      if (asTab) { window.open(htmlUrl, '_blank'); return; }
+      window.open(htmlUrl, `presentation-${presentationId}`, 'popup=1,width=1000,height=700');
+    }, [htmlUrl, presentationId]);
+
+    return {
+      presentation, htmlUrl,
+      shareLink, setShareLink, shareLoading, shareCopied, handleCreateShare, handleCopy,
+      exportLoading, exportError, setExportError, handleExport,
+      commitRename, handleDelete, popOut,
+    };
+  }
+
+  function PresentationWindowActions({ windowKey, instanceId, onClose, onTitleChange }) {
+    const presentationId = instanceId;
+    const {
+      presentation, htmlUrl,
+      shareLink, setShareLink, shareLoading, shareCopied, handleCreateShare, handleCopy,
+      exportLoading, exportError, setExportError, handleExport,
+      commitRename, handleDelete, popOut,
+    } = usePresentationActions(presentationId, windowKey, { onClose, onTitleChange });
+
+    const [renameOpen, setRenameOpen] = useState(false);
+    const [editTitle, setEditTitle] = useState('');
+    const [shareOpen, setShareOpen] = useState(false);
+
+    // Follow the stored title (initial load, or a rename made elsewhere)
+    // unless the user is mid-edit in the rename box.
+    useEffect(() => {
+      if (!renameOpen) setEditTitle(presentation?.title || '');
+    }, [presentation?.title, renameOpen]);
+
+    // BasicWindow's root is overflow-hidden (rounded corners), so an
+    // `absolute` popover anchored in the header is clipped. Every popover
+    // here portals to document.body with fixed coords from its button.
+    const renameBtnRef = useRef(null);
+    const shareBtnRef = useRef(null);
+    const [anchor, setAnchor] = useState(null);
+
+    const anchorTo = useCallback((ref) => {
+      const r = ref.current?.getBoundingClientRect();
+      if (r) setAnchor({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    }, []);
+
+    const submitRename = useCallback(() => {
+      setRenameOpen(false);
+      commitRename(editTitle);
+    }, [commitRename, editTitle]);
+
+    // Dismiss any open popover on outside click / Escape — portalled content
+    // sits outside this window's DOM subtree, so nothing else dismisses it.
+    useEffect(() => {
+      if (!renameOpen && !shareOpen && !exportError) return undefined;
+      const onDown = (e) => {
+        if (renameBtnRef.current?.contains(e.target)) return;
+        if (shareBtnRef.current?.contains(e.target)) return;
+        if (e.target.closest?.('[data-pres-popover]')) return;
+        setRenameOpen(false);
+        setShareOpen(false);
+        setExportError(null);
+      };
+      const onKey = (e) => {
+        if (e.key !== 'Escape') return;
+        setRenameOpen(false);
+        setShareOpen(false);
+        setExportError(null);
+      };
+      document.addEventListener('mousedown', onDown);
+      document.addEventListener('keydown', onKey);
+      return () => {
+        document.removeEventListener('mousedown', onDown);
+        document.removeEventListener('keydown', onKey);
+      };
+    }, [renameOpen, shareOpen, exportError, setExportError]);
 
     // No Maximize button here on purpose — BasicWindow's header already has
     // one, and duplicating it was half the reason this app drew a second bar.
@@ -519,7 +562,7 @@ export function register(host) {
           </svg>
         </button>
         <button
-          onClick={() => { if (htmlUrl) window.open(htmlUrl, `presentation-${presentationId}`, 'popup=1,width=1000,height=700'); }}
+          onClick={() => popOut()}
           className="p-1 rounded hover:bg-white/10 text-[var(--color-text-muted)]"
           title="Pop out to new window"
         >
@@ -560,14 +603,14 @@ export function register(host) {
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Enter') submitRename();
                 if (e.key === 'Escape') { setRenameOpen(false); setEditTitle(presentation?.title || ''); }
               }}
               className="w-full text-[11px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
             />
             <div className="flex justify-end mt-2">
               <button
-                onClick={commitRename}
+                onClick={submitRename}
                 disabled={!editTitle.trim()}
                 className="text-[11px] px-2 py-1 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors disabled:opacity-40"
               >
@@ -640,37 +683,213 @@ export function register(host) {
     );
   }
 
+  // The narrow-screen action sheet. Rendered by the body, not the title bar,
+  // because the title bar is exactly what a phone does not get.
+  //
+  // Deliberately does NOT reuse the titlebar buttons' classes: those are `p-1`
+  // around a 14px icon (~22px), which is fine under a mouse and too small for
+  // a thumb. Everything here is at least 44px tall. Sizing is inline rather
+  // than in arbitrary-value utility classes, because an app bundle can only
+  // rely on the utilities the host already ships — an invented one silently
+  // does nothing and reads as a layout bug.
+  function PresentationActionSheet({ actions, onDismiss }) {
+    const {
+      presentation, shareLink, setShareLink, shareLoading, shareCopied,
+      handleCreateShare, handleCopy, exportLoading, exportError, setExportError,
+      handleExport, commitRename, handleDelete, popOut,
+    } = actions;
+    const [view, setView] = useState('menu');
+    const [title, setTitle] = useState(presentation?.title || '');
+
+    const row = {
+      display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+      minHeight: 44, padding: '0 16px', background: 'transparent',
+      border: 0, color: 'var(--color-text-primary)', fontSize: 14,
+      textAlign: 'left', cursor: 'pointer',
+    };
+    const sheet = {
+      position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 20,
+      background: 'var(--color-bg-secondary)',
+      borderTop: '1px solid var(--color-border)',
+      borderTopLeftRadius: 12, borderTopRightRadius: 12,
+      paddingTop: 8, paddingBottom: 8, maxHeight: '80%', overflowY: 'auto',
+    };
+
+    return (
+      <>
+        <div
+          onClick={onDismiss}
+          style={{ position: 'absolute', inset: 0, zIndex: 19, background: 'rgba(0,0,0,0.45)' }}
+        />
+        <div style={sheet} role="menu">
+          {view === 'menu' && (
+            <>
+              <button style={row} onClick={() => { setShareLink(null); setView('share'); }}>Share</button>
+              <button
+                style={{ ...row, opacity: exportLoading ? 0.5 : 1 }}
+                disabled={exportLoading}
+                onClick={handleExport}
+              >
+                {exportLoading ? 'Exporting…' : 'Export as PNG'}
+              </button>
+              <button style={row} onClick={() => { setTitle(presentation?.title || ''); setView('rename'); }}>Rename</button>
+              <button style={row} onClick={() => { popOut({ asTab: true }); onDismiss(); }}>Open in new tab</button>
+              <button
+                style={{ ...row, color: 'var(--color-danger)' }}
+                onClick={() => { handleDelete(); onDismiss(); }}
+              >
+                Delete
+              </button>
+              {exportError && (
+                <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--color-danger)' }}>
+                  Export failed: {exportError}
+                  <button
+                    onClick={() => setExportError(null)}
+                    style={{ ...row, minHeight: 36, padding: 0, marginTop: 4, fontSize: 12, color: 'var(--color-text-muted)' }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {view === 'share' && (
+            <div style={{ padding: '8px 16px 4px' }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>
+                {shareLink ? 'Link generated:' : 'Link expires after:'}
+              </div>
+              {shareLoading ? (
+                <div style={{ fontSize: 13, color: 'var(--color-text-muted)', padding: '12px 0' }}>Generating link…</div>
+              ) : shareLink ? (
+                <>
+                  <div style={{
+                    fontSize: 11, fontFamily: 'monospace', wordBreak: 'break-all',
+                    background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)',
+                    borderRadius: 6, padding: 8, color: 'var(--color-text-primary)',
+                  }}>
+                    {shareLink}
+                  </div>
+                  <button style={{ ...row, padding: 0, color: 'var(--color-accent)' }} onClick={handleCopy}>
+                    {shareCopied ? '✓ Copied' : 'Copy link'}
+                  </button>
+                </>
+              ) : (
+                [{ label: '1 hour', value: 3600 }, { label: '1 day', value: 86400 }, { label: 'Never expires', value: null }]
+                  .map(({ label, value }) => (
+                    <button key={label} style={{ ...row, padding: 0 }} onClick={() => handleCreateShare(value)}>
+                      {label}
+                    </button>
+                  ))
+              )}
+              <button style={{ ...row, padding: 0, color: 'var(--color-text-muted)' }} onClick={() => setView('menu')}>← Back</button>
+            </div>
+          )}
+
+          {view === 'rename' && (
+            <div style={{ padding: '8px 16px 4px' }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8 }}>Rename presentation</div>
+              <input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { commitRename(title); onDismiss(); } }}
+                style={{
+                  // 16px, not smaller: iOS Safari zooms the whole page in on
+                  // any focused field below that.
+                  width: '100%', minHeight: 44, fontSize: 16, padding: '0 10px',
+                  background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)',
+                  border: '1px solid var(--color-border)', borderRadius: 6, outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ ...row, color: 'var(--color-text-muted)' }} onClick={() => setView('menu')}>Cancel</button>
+                <button
+                  style={{ ...row, color: 'var(--color-accent)', justifyContent: 'flex-end' }}
+                  disabled={!title.trim()}
+                  onClick={() => { commitRename(title); onDismiss(); }}
+                >
+                  Rename
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
   // Body is now JUST the viewer — the toolbar that used to sit above this
   // iframe is PresentationWindowActions in the host's title bar, so the window
   // has one header instead of two and the presentation gets that height back.
-  function PresentationWindowBody({ windowKey, instanceId, onClose }) {
+  //
+  // ...except on a narrow screen, where there IS no title bar to put it in:
+  // aw-workspace-ui's mobile shell renders windowBodySlot and never
+  // windowTitlebarSlot, so a phone user otherwise has no Share/Export/Rename/
+  // Pop-out/Delete at all. Hence the floating button below. Gating is on the
+  // measured container WIDTH — not a UA test, which would get the 1600px
+  // desktop-on-phone layout and the 320px desktop window both wrong. The
+  // accepted cost is that a desktop window dragged under 640px shows both the
+  // titlebar buttons and the button: redundant, not broken.
+  function PresentationWindowBody({ windowKey, instanceId, onClose, onTitleChange }) {
     const presentationId = instanceId;
     const iframeRef = useRef(null);
-    const htmlUrl = presentationId ? host.app.absoluteApiUrl(`/presentations/${presentationId}/html`) : null;
+    const containerRef = useRef(null);
+    const [narrow, setNarrow] = useState(false);
+    const [sheetOpen, setSheetOpen] = useState(false);
+    const actions = usePresentationActions(presentationId, windowKey, { onClose, onTitleChange });
+    const { htmlUrl } = actions;
 
-    // Published for the sibling actions contribution's export-as-PNG.
+    // Same ResizeObserver pattern as PresentationThumbnail.
+    useEffect(() => {
+      const el = containerRef.current;
+      if (!el || typeof ResizeObserver === 'undefined') return undefined;
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const w = entry.contentRect.width;
+          if (w > 0) setNarrow(w < NARROW_WIDTH);
+        }
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
+
+    useEffect(() => { if (!narrow) setSheetOpen(false); }, [narrow]);
+
+    // Published for the actions' export-as-PNG — the titlebar copy and the
+    // sheet both read the iframe document back through this map.
     useEffect(() => {
       iframesByWindow.set(windowKey, iframeRef.current);
       return () => iframesByWindow.delete(windowKey);
     }, [windowKey]);
 
-    // Self-close when this presentation is deleted elsewhere. The actions
-    // component has its own copy of this listener for the title; this half
-    // stays here because closing is the BODY's window to close.
-    useEffect(() => {
-      const handler = (e) => {
-        const msg = e.detail;
-        if (msg?.type === 'presentation_update' && msg.action === 'delete' && msg.id === presentationId) onClose?.();
-      };
-      window.addEventListener('aw-presentation-update', handler);
-      return () => window.removeEventListener('aw-presentation-update', handler);
-    }, [presentationId, onClose]);
-
     return (
-      <div className="flex flex-col bg-[var(--color-bg-secondary)] h-full">
+      <div ref={containerRef} className="flex flex-col bg-[var(--color-bg-secondary)] h-full">
         <div className="flex-1 relative">
           {htmlUrl && (
             <iframe ref={iframeRef} src={htmlUrl} className="absolute inset-0 w-full h-full bg-white border-0" title="Presentation" />
+          )}
+          {narrow && !sheetOpen && (
+            <button
+              onClick={() => setSheetOpen(true)}
+              aria-label="Presentation actions"
+              style={{
+                position: 'absolute', bottom: 16, right: 16, zIndex: 18,
+                width: 48, height: 48, borderRadius: 24,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--color-bg-secondary)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-primary)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)', cursor: 'pointer',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+          )}
+          {narrow && sheetOpen && (
+            <PresentationActionSheet actions={actions} onDismiss={() => setSheetOpen(false)} />
           )}
         </div>
       </div>
