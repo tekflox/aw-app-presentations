@@ -164,6 +164,48 @@ def test_get_html_and_share_token(client):
     assert bad.status_code == 403
 
 
+def test_served_html_is_normalized_on_both_paths(client):
+    """The share link is the surface the mobile incident was reported
+    against, so it gets its own assertion rather than an inference from the
+    token-less path — they are the same handler today, and a future auth
+    change could stop them being so."""
+    body = "<html><head><title>t</title></head><body><b>x</b></body></html>"
+    pid = client.post("/presentations", json={"title": "T", "html": body}).json()["id"]
+
+    plain = client.get(f"/presentations/{pid}/html")
+    assert 'name="viewport"' in plain.text
+    assert "data-aw-responsive-fallback" in plain.text
+    assert "<b>x</b>" in plain.text
+
+    token = client.post(f"/presentations/{pid}/share", json={}).json()["token"]
+    shared = client.get(f"/presentations/{pid}/html", params={"token": token})
+    assert 'name="viewport"' in shared.text
+    assert "data-aw-responsive-fallback" in shared.text
+
+    # Storage stays verbatim — normalization is a render-time concern, so
+    # update_presentation round-trips without drift.
+    assert client.get(f"/presentations/{pid}").json()["html"] == body
+
+
+def test_export_renders_the_normalized_html(client, monkeypatch, tmp_path):
+    """One normalization path, not two: an export asked for at width=390 has
+    to render what a phone would actually get."""
+    pid = client.post("/presentations", json={
+        "title": "T", "html": "<html><head></head><body>x</body></html>"}).json()["id"]
+
+    seen = {}
+
+    def _fake_render(html, output_path, width, height, scale):
+        seen["html"] = html
+        with open(output_path, "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\nfake")
+    monkeypatch.setattr(routes_mod, "_render_html_to_png", _fake_render)
+
+    assert client.post(f"/presentations/{pid}/export", json={}).status_code == 200
+    assert "data-aw-responsive-fallback" in seen["html"]
+    assert 'name="viewport"' in seen["html"]
+
+
 def test_websocket_init_and_broadcast(client):
     with client.websocket_connect("/ws") as ws:
         init = ws.receive_json()

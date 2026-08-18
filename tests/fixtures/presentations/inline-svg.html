@@ -1,0 +1,192 @@
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 28px 32px; background: #0d1117; color: #c9d1d9; }
+  .header { border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 22px; }
+  .header h1 { color: #58a6ff; margin: 0 0 6px; font-size: 26px; }
+  .header .subtitle { color: #8b949e; font-size: 14px; }
+  .section { margin-bottom: 30px; }
+  .section h2 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 8px; font-size: 17px; letter-spacing: .3px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px 18px; margin: 12px 0; }
+  .lead { font-size: 15px; line-height: 1.62; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 11.5px; font-weight: 700; letter-spacing: .3px; }
+  .badge-green { background: #1b4332; color: #2dd4bf; }
+  .badge-yellow { background: #3d2e00; color: #f0c000; }
+  .badge-red { background: #3d0000; color: #f87171; }
+  .badge-blue { background: #0c2d48; color: #58a6ff; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .metrics { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
+  .metric { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px 20px; text-align: center; flex: 1; min-width: 120px; }
+  .metric .value { font-size: 27px; font-weight: 700; color: #f0f6fc; line-height: 1.1; }
+  .metric .label { font-size: 11.5px; color: #8b949e; margin-top: 4px; }
+  .metric.hi .value { color: #f0c000; }
+  .finding { border-left: 3px solid #58a6ff; padding-left: 13px; margin: 14px 0; font-size: 14px; line-height: 1.6; }
+  .finding.warning { border-color: #f0c000; }
+  .finding.success { border-color: #2dd4bf; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  svg text { font-family: -apple-system, system-ui, sans-serif; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Pendência 2 — 13 testcases parados em <span style="color:#f0c000">unknown</span></h1>
+    <div class="subtitle">aw-app-architecture v0.19.1 &mdash; por que um teste que existe nunca produz veredito</div>
+  </div>
+
+  <div class="section">
+    <div class="metrics">
+      <div class="metric"><div class="value">310</div><div class="label">testcases no catálogo</div></div>
+      <div class="metric"><div class="value" style="color:#2dd4bf">227</div><div class="label">passando</div></div>
+      <div class="metric"><div class="value" style="color:#f87171">8</div><div class="label">vermelhos (pendência 1)</div></div>
+      <div class="metric"><div class="value" style="color:#f0c000">78</div><div class="label">unknown</div></div>
+      <div class="metric"><div class="value">65</div><div class="label">desses, marcados SKIP:</div></div>
+      <div class="metric hi"><div class="value">13</div><div class="label">sem SKIP: &mdash; esta pendência</div></div>
+    </div>
+    <div class="lead card">
+      <b>O ponto:</b> <code>unknown</code> não quer dizer &ldquo;falhou&rdquo;. Quer dizer <b>nenhum veredito foi produzido</b> &mdash; o
+      runner rodou algo e o exit code não disse nada sobre o código. 65 desses 78 são honestos: alguém marcou
+      <code>SKIP:</code> com o motivo. Os outros <b>13 são ruído</b>: parecem &ldquo;ainda não avaliados&rdquo;, mas nunca vão ser,
+      porque o comando que o runner escolhe pra eles não pode funcionar.
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Como o veredito é decidido — e onde quebra</h2>
+    <svg viewBox="0 0 1120 700" width="100%" style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:6px 0;">
+      <defs>
+        <marker id="ag" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <path d="M0,0 L10,4 L0,8 z" fill="#2dd4bf"/>
+        </marker>
+        <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <path d="M0,0 L10,4 L0,8 z" fill="#f87171"/>
+        </marker>
+        <marker id="ab" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <path d="M0,0 L10,4 L0,8 z" fill="#58a6ff"/>
+        </marker>
+      </defs>
+
+      <text x="40" y="30" fill="#2dd4bf" font-size="13" font-weight="700" letter-spacing="1">ARQUIVO .py — o caminho que funciona</text>
+      <text x="620" y="30" fill="#f87171" font-size="13" font-weight="700" letter-spacing="1">ARQUIVO .swift — o caminho que trava</text>
+
+      <rect x="40" y="48" width="460" height="66" rx="7" fill="#161b22" stroke="#30363d"/>
+      <text x="60" y="74" fill="#f0f6fc" font-size="14.5" font-weight="600">1 · Discovery acha o arquivo</text>
+      <text x="60" y="97" fill="#8b949e" font-size="12.5" font-family="ui-monospace, Menlo, monospace">test_*.py  →  kind = unit, roda com pytest</text>
+
+      <rect x="620" y="48" width="460" height="66" rx="7" fill="#161b22" stroke="#30363d"/>
+      <text x="640" y="74" fill="#f0f6fc" font-size="14.5" font-weight="600">1 · Discovery acha o arquivo</text>
+      <text x="640" y="97" fill="#8b949e" font-size="12.5" font-family="ui-monospace, Menlo, monospace">*Tests.swift  →  XCTest, sem convenção genérica</text>
+
+      <line x1="270" y1="114" x2="270" y2="146" stroke="#2dd4bf" stroke-width="2" marker-end="url(#ag)"/>
+      <line x1="850" y1="114" x2="850" y2="146" stroke="#f87171" stroke-width="2" marker-end="url(#ar)"/>
+
+      <rect x="40" y="150" width="460" height="66" rx="7" fill="#161b22" stroke="#30363d"/>
+      <text x="60" y="176" fill="#f0f6fc" font-size="14.5" font-weight="600">2 · Linha no catálogo, <tspan font-family="ui-monospace, Menlo, monospace" font-size="13">run_command = NULL</tspan></text>
+      <text x="60" y="199" fill="#8b949e" font-size="12.5">O discovery nunca inventa um comando — só registra o arquivo.</text>
+
+      <rect x="620" y="150" width="460" height="66" rx="7" fill="#161b22" stroke="#f87171" stroke-opacity="0.5"/>
+      <text x="640" y="176" fill="#f0f6fc" font-size="14.5" font-weight="600">2 · Linha no catálogo, <tspan font-family="ui-monospace, Menlo, monospace" font-size="13">run_command = NULL</tspan></text>
+      <text x="640" y="199" fill="#f87171" font-size="12.5">Idem — mas aqui NULL é o bug, porque não existe fallback válido.</text>
+
+      <line x1="270" y1="216" x2="270" y2="248" stroke="#2dd4bf" stroke-width="2" marker-end="url(#ag)"/>
+      <line x1="850" y1="216" x2="850" y2="248" stroke="#f87171" stroke-width="2" marker-end="url(#ar)"/>
+
+      <rect x="40" y="252" width="460" height="86" rx="7" fill="#161b22" stroke="#30363d"/>
+      <text x="60" y="278" fill="#f0f6fc" font-size="14.5" font-weight="600">3 · Runner: 3 níveis, o primeiro que casar vence</text>
+      <text x="60" y="300" fill="#6e7681" font-size="12.5" font-family="ui-monospace, Menlo, monospace">nível 1  run_command  →  NULL, pula</text>
+      <text x="60" y="321" fill="#2dd4bf" font-size="12.5" font-family="ui-monospace, Menlo, monospace">nível 2  component.test_cmd  →  pytest {rel}   ✓ casa</text>
+
+      <rect x="620" y="252" width="460" height="86" rx="7" fill="#161b22" stroke="#f87171" stroke-opacity="0.5"/>
+      <text x="640" y="278" fill="#f0f6fc" font-size="14.5" font-weight="600">3 · Mesmos 3 níveis — e é isso que dá errado</text>
+      <text x="640" y="300" fill="#6e7681" font-size="12.5" font-family="ui-monospace, Menlo, monospace">nível 1  run_command  →  NULL, pula</text>
+      <text x="640" y="321" fill="#f87171" font-size="12.5" font-family="ui-monospace, Menlo, monospace">nível 2  test_cmd do aw-mobile  →  pytest num .swift</text>
+
+      <line x1="270" y1="338" x2="270" y2="370" stroke="#2dd4bf" stroke-width="2" marker-end="url(#ag)"/>
+      <line x1="850" y1="338" x2="850" y2="370" stroke="#f87171" stroke-width="2" marker-end="url(#ar)"/>
+
+      <rect x="40" y="374" width="460" height="66" rx="7" fill="#161b22" stroke="#30363d"/>
+      <text x="60" y="400" fill="#f0f6fc" font-size="14.5" font-weight="600">4 · pytest realmente executa o arquivo</text>
+      <text x="60" y="423" fill="#8b949e" font-size="12.5" font-family="ui-monospace, Menlo, monospace">exit 0 = passou   ·   exit 1 = falhou de verdade</text>
+
+      <rect x="620" y="374" width="460" height="66" rx="7" fill="#161b22" stroke="#f87171" stroke-opacity="0.5"/>
+      <text x="640" y="400" fill="#f0f6fc" font-size="14.5" font-weight="600">4 · pytest não coleta nada de um .swift</text>
+      <text x="640" y="423" fill="#f87171" font-size="12.5" font-family="ui-monospace, Menlo, monospace">exit 5 (nada coletado) — não é falha, é ausência de resultado</text>
+
+      <line x1="270" y1="440" x2="270" y2="472" stroke="#2dd4bf" stroke-width="2" marker-end="url(#ag)"/>
+      <line x1="850" y1="440" x2="850" y2="472" stroke="#f87171" stroke-width="2" marker-end="url(#ar)"/>
+
+      <rect x="40" y="476" width="460" height="66" rx="7" fill="#0f2a22" stroke="#2dd4bf" stroke-opacity="0.55"/>
+      <text x="60" y="503" fill="#2dd4bf" font-size="15" font-weight="700">passing / fail — sinal real</text>
+      <text x="60" y="525" fill="#8b949e" font-size="12.5">Grava em last_run_status. A matriz aprende alguma coisa.</text>
+
+      <rect x="620" y="476" width="460" height="66" rx="7" fill="#2b0f0f" stroke="#f87171" stroke-opacity="0.55"/>
+      <text x="640" y="503" fill="#f87171" font-size="15" font-weight="700">unknown — e vai ficar assim pra sempre</text>
+      <text x="640" y="525" fill="#8b949e" font-size="12.5">Todo sweep repete. 13 linhas de ruído permanente no painel.</text>
+
+      <line x1="850" y1="542" x2="850" y2="580" stroke="#58a6ff" stroke-width="2" marker-end="url(#ab)"/>
+
+      <rect x="40" y="584" width="1040" height="94" rx="7" fill="#161b22" stroke="#58a6ff" stroke-opacity="0.5"/>
+      <text x="62" y="612" fill="#58a6ff" font-size="15" font-weight="700">A correção — curto-circuitar no nível 1</text>
+      <text x="62" y="637" fill="#c9d1d9" font-size="13" font-family="ui-monospace, Menlo, monospace">set_testcase_run_command(id, "SKIP: precisa de Xcode e simulador; a suíte roda no runner mac-fred, não aqui.")</text>
+      <text x="62" y="662" fill="#8b949e" font-size="12.8">O prefixo SKIP: bate no nível 1, o nível 2 nunca é alcançado, e a linha grava <tspan fill="#c9d1d9" font-family="ui-monospace, Menlo, monospace">skipped</tspan> com o motivo — em vez de ser apagada pra deixar o painel verde.</text>
+    </svg>
+  </div>
+
+  <div class="section">
+    <h2>Os 13 — estado verificado agora no catálogo</h2>
+
+    <div class="finding warning">
+      <b>9 Swift do <code>aw-mobile</code></b> &mdash; confirmei: continuam com <code>run_command: null</code>.
+      Outros 13 Swift do mesmo repo já foram marcados numa rodada anterior; o discovery achou estes depois.
+      Não há <code>xcodebuild</code> nem <code>swift</code> neste container &mdash; a suíte roda no runner <b>mac-fred</b>.
+    </div>
+    <table>
+      <tr><th>Arquivo</th><th>kind</th><th>run_command</th></tr>
+      <tr><td class="mono">Tests/AWCredentialEnvelopeTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/AWEmailCodeLoginTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/AWGoogleSignInTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/AWWorkspaceStorageTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/AgentsPlatformURLTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/BackendURLMigrationTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/SharedMetaSessionTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">Tests/WebSSOTests.swift</td><td>unit</td><td><span class="badge badge-yellow">null</span></td></tr>
+      <tr><td class="mono">UITests/AWLoginUITests.swift</td><td>e2e</td><td><span class="badge badge-yellow">null</span></td></tr>
+    </table>
+
+    <div class="finding" style="margin-top:22px">
+      <b>4 Python que o discovery achou depois do último sweep</b> &mdash; esses são diferentes: <i>podem</i> rodar.
+      Precisam ser executados uma vez e triados. Verifiquei os arquivos no disco:
+    </div>
+    <table>
+      <tr><th>Arquivo</th><th>no disco</th><th>ação</th></tr>
+      <tr><td class="mono">repos/aw-app-crispal/tests/test_boot_queue_resume.py</td><td><span class="badge badge-green">existe</span></td><td>rodar e triar</td></tr>
+      <tr><td class="mono">repos/aw-app-proxy/tests/test_routes_browser_offline.py</td><td><span class="badge badge-green">existe</span></td><td>rodar e triar</td></tr>
+      <tr><td class="mono">repos/aw-backend/src/tests/unit/libs/test_redis_poll_block_cap.py</td><td><span class="badge badge-green">existe</span></td><td>rodar e triar</td></tr>
+      <tr><td class="mono">repos/aw-backend/src/tests/react/test_react_build.py</td><td><span class="badge badge-red">apagado</span></td><td>remover a linha órfã</td></tr>
+    </table>
+    <div class="finding warning">
+      A última é a <b>linha órfã</b>: o arquivo testava um <code>src/app/</code> React que nunca existiu nesse repo (veio junto
+      no commit de scaffold copiado do awserv) e foi apagado. Só a linha no catálogo sobrou. Apagar <b>conferindo o
+      caminho exato no disco</b> &mdash; um filtro por substring já levou junto, uma vez, a linha do monolito, cujo arquivo existe.
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Por que isso vale o esforço</h2>
+    <div class="card lead">
+      Nenhum dos 13 é bug de código &mdash; é o catálogo mentindo sobre si mesmo. Enquanto existirem, o painel tem 13 linhas
+      que parecem &ldquo;pendente de avaliação&rdquo; e nunca saem de lá, e todo sweep de ~25 min gasta tempo re-rodando pytest
+      contra arquivos Swift. Depois da correção o bucket <code>unknown</code> passa a significar uma coisa só:
+      <b>tudo o que está lá está lá por um motivo escrito.</b>
+      <div style="margin-top:12px; color:#8b949e; font-size:13.5px;">
+        Regra que vale pra tudo: o veredito que conta é o do runner do app
+        (<code>POST /api/apps/architecture/testcases/run</code>), que executa dentro do container do workspace.
+        Rodar pytest de um container de agente dá números diferentes e mentirosos.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

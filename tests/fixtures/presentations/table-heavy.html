@@ -1,0 +1,150 @@
+<![CDATA[
+<html>
+<head>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px; background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+  .header { border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 24px; }
+  .header h1 { color: #58a6ff; margin: 0 0 8px; }
+  .header .subtitle { color: #8b949e; }
+  .section { margin-bottom: 32px; }
+  .section h2 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin: 12px 0; }
+  .card h3 { color: #f0f6fc; margin-top: 0; font-size: 15px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+  .badge-green { background: #1b4332; color: #2dd4bf; }
+  .badge-yellow { background: #3d2e00; color: #f0c000; }
+  .badge-red { background: #3d0000; color: #f87171; }
+  .badge-blue { background: #0c2d48; color: #58a6ff; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #21262d; font-size: 13px; vertical-align: top; }
+  th { color: #8b949e; font-weight: 600; }
+  code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12px; }
+  .finding { border-left: 3px solid #58a6ff; padding-left: 12px; margin: 12px 0; }
+  .finding.critical { border-color: #f87171; }
+  .finding.warning { border-color: #f0c000; }
+  .finding.success { border-color: #2dd4bf; }
+  .metric { display: inline-block; text-align: center; margin: 0 24px 12px 0; }
+  .metric .value { font-size: 26px; font-weight: 700; color: #f0f6fc; }
+  .metric .label { font-size: 12px; color: #8b949e; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 4px 0; font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>System Analyst — Auditoria Diária</h1>
+  <div class="subtitle">2026-08-15 · aw-workspace (slug: aw)</div>
+</div>
+
+<div class="section">
+  <h2>Resumo</h2>
+  <div class="metric"><div class="value">36</div><div class="label">cards revalidados (Fase 1)</div></div>
+  <div class="metric"><div class="value">1</div><div class="label">auto-resolvido</div></div>
+  <div class="metric"><div class="value">3</div><div class="label">falso-verde detectado</div></div>
+  <div class="metric"><div class="value">0</div><div class="label">findings NOVOS (P1/P2)</div></div>
+  <div class="metric"><div class="value">3</div><div class="label">cards reforçados c/ evidência</div></div>
+  <div class="card">
+    <p><b>Fase 1:</b> de ~100+ cards no board com Source=system-analyst (a tool não pagina além de 100, <code>has_more:true</code>), 36 batem com as 4 categorias de auditoria atuais deste skill (<code>degraded:</code>, <code>arch:</code>, <code>resilience:</code>, <code>runs:</code>, <code>tooling:</code>, <code>security:</code>, <code>error:</code> legado). Desses 36: 1 auto-resolvido de verdade, 3 tinham CheckHint falso-verde (NÃO fechados), 2 tinham hint degenerado (literal <code>true</code>), 1 truncado + contém segredo (pulado), 12 sem CheckHint (não verificáveis), 17 confirmados ainda reais via execução.</p>
+    <p><b>Fase 2:</b> nenhum finding P1/P2 novo — os 4 audits não encontraram nada que já não estivesse rastreado. 3 cards existentes reforçados com evidência fresca via comentário (não recriados, para não disparar o bug de dedup já conhecido).</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Degradação silenciosa (Audit 1)</h2>
+  <div class="finding success">
+    <b><code>aw-workspace-cli doctor</code> → exit 0 — "No silent degradation found."</b>
+    <ul>
+      <li>System CLIs: 29/29 saudáveis</li>
+      <li>Permissões: nenhuma capability recusada</li>
+      <li>Componentes (<code>status</code>): 9/9 rodando (browser, code-server, codegraphcontext:visualizer, crispal + db + wordpress, kb, mcp-gateway, proxy)</li>
+      <li>MCP: gateway servindo tools de 13 apps</li>
+    </ul>
+  </div>
+  <div class="finding warning">
+    A seção MCP do doctor imprime um aviso estático ("upstream failed to connect... re-checks every 60s") mas <b>nunca soma em <code>problems</code></b> — reconfirma o card já aberto <code>resilience:doctor-mcp-section-cannot-fail</code> (li o código: <code>_mcp()</code> não retorna contagem, chamada em linha própria sem <code>+=</code>). Nenhum card novo — já rastreado.
+  </div>
+</div>
+
+<div class="section">
+  <h2>Deriva de arquitetura (Audit 2)</h2>
+  <div class="finding success">
+    27 apps instalados (<code>aw-workspace-cli apps --json</code>). Verifiquei cobertura de KB para os candidatos menos óbvios — <code>devteam</code>, <code>maintenance-agents</code>, <code>google-cloud</code>, <code>aws</code>, <code>remote-screen</code> — todos têm README próprio indexado. Nenhum <code>arch:undocumented-app</code> novo.
+  </div>
+  <div class="finding warning">
+    12 dos 27 apps declaram <code>contributes.mcp</code>. Comparado à lista de 13 apps que o doctor reporta como contribuindo tools ao gateway, o único descasamento é <code>remote-host-cli</code> (declara 16 tools, gateway não serve nenhuma) — já rastreado em <code>degraded:remote-host-cli-mcp-not-wired-to-gateway</code>, reconfirmado real (checkhint reexecutado, exit 1). "browser"/"code-server" aparecerem na lista do doctor sem <code>contributes.mcp</code> no próprio manifest é esperado — vêm de outro app (devctl) registrando servers com esses nomes, não é bug.
+  </div>
+</div>
+
+<div class="section">
+  <h2>Resiliência (Audit 3)</h2>
+  <div class="finding success">
+    Sweep de <code>requests</code>/<code>httpx</code> sem <code>timeout=</code> em <code>src/</code> atual: nenhum achado novo. Único candidato (<code>src/apps/registry_client.py:75,84</code>) é falso positivo do meu próprio grep — <code>timeout=self.timeout</code> está na linha seguinte, dentro dos 3 métodos da <code>CloudRegistry</code>.
+  </div>
+  <div class="finding success">
+    Sweep de <code>except (Exception|OSError): pass</code> sem log em <code>src/</code>, excluindo os arquivos já cobertos por cards abertos (terminal_manager.py, apps/runtime.py, libs/skills_sync.py): 0 ocorrências novas.
+  </div>
+  <div class="finding critical">
+    <b>3 CheckHints comprovadamente falso-verde encontrados nesta rodada</b> (detalhe na seção "Proposto para decisão humana" e lição gravada na KB) — reforça a prioridade de <code>tooling:checkhint-false-green-on-missing-target</code>.
+  </div>
+</div>
+
+<div class="section">
+  <h2>Falhas de execução de agentes (Audit 4)</h2>
+  <table>
+    <tr><th>Métrica</th><th>Valor (últimos 150 runs)</th></tr>
+    <tr><td>success</td><td>145</td></tr>
+    <tr><td>error</td><td>4</td></tr>
+    <tr><td>running (esta própria auditoria)</td><td>1</td></tr>
+    <tr><td>success com tokens_in=tokens_out=0 (false-success)</td><td>12</td></tr>
+  </table>
+  <div class="finding warning">
+    <b>crispal-codex:</b> 40 runs na janela, 3 <code>error</code> (runner 'aw-codex' /execute 502, mesmo segundo — rajada) + 7 dos 12 false-success. Comentário adicionado em <code>runs:crispal-codex-aw-codex-runner-502-intermittent</code> e <code>runs:false-success-zero-tokens-labelled-success</code> com essa evidência — cards já existiam, não recriados.
+  </div>
+  <div class="finding">
+    <b>telegram-opus:</b> 1 erro isolado — runner 'aw-claude' /execute 502, <code>"connection refused" 127.0.0.1:9030</code>. Sintoma diferente do 404 já rastreado em <code>error:agents-platform-multitenant-runner-aw-claude-404</code> (mesmo runner). 1 ocorrência só → P3, comentado no card existente, sem card novo.
+  </div>
+</div>
+
+<div class="section">
+  <h2>P3 — observado, sem card</h2>
+  <ul>
+    <li>telegram-opus / runner aw-claude: 1x "connection refused :9030" (ver acima).</li>
+    <li>Board tem ~64 cards adicionais (só nesta primeira página de 100) com Source=system-analyst mas FindingKey fora das 4 categorias atuais (<code>feature:</code>, <code>decoupled-apps:</code>, <code>aw-backend-multiworker:</code>, <code>test-coverage:</code>, <code>coverage:</code>, <code>byod:</code>, <code>architecture:</code>, <code>framework:</code>, <code>gap:</code>, <code>bug:</code>, <code>infra:</code>). Confirmei via <code>get_kanban_properties</code> num deles (aw-app-terraform) que o campo Source é mesmo "system-analyst" — não é bug do filtro da tool, parecem cards de outros fluxos/épocas que usaram esse Source genericamente. Não fiz saneamento nem novo scan sobre eles.</li>
+    <li>Dois cards de resilience quase idênticos (<code>resilience:bare-except-pass-current-src-2026-08</code> e <code>resilience:silent-failure-aw-workspace-src</code>) — mesmos 3 arquivos, mesma contagem de 10 ocorrências, FindingKeys diferentes. Parecem duplicatas que o dedup não capturou por terem chaves distintas.</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>Proposto para decisão humana</h2>
+  <div class="card">
+    <h3>3 CheckHints falso-verde encontrados e documentados (não corrigidos — não é meu papel)</h3>
+    <table>
+      <tr><th>Card</th><th>Bug do hint</th></tr>
+      <tr><td><code>resilience:bare-except-pass-api-routes</code></td><td><code>glob.glob()</code> num path retirado (<code>/opt/agentic-workspace/...</code>) retorna lista vazia → sempre exit 0</td></tr>
+      <tr><td><code>error:aw-backend-host-link-exec-start-json-decode</code></td><td><code>! curl ... || grep ...</code> — se o curl falhar (endpoint inalcançável), o <code>!</code> vira true e o <code>||</code> nunca roda o grep real</td></tr>
+      <tr><td><code>degraded:codegraphcontext-empty-graph</code></td><td><code>grep -q 'repositories.*[A-Za-z]'</code> casa com a própria chave JSON "repositories", não com o conteúdo — grafo real ainda está vazio (<code>{"repositories": []}</code>)</td></tr>
+    </table>
+    <p>Lição gravada na KB (<code>memory/system-analyst-checkhint-false-green-patterns-2026-08-15.md</code>) para as próximas rodadas de saneamento não confiarem cegamente em exit 0.</p>
+  </div>
+  <div class="card">
+    <h3><code>list_kanban_cards</code> não pagina</h3>
+    <p><code>has_more:true</code> mas a tool só aceita <code>limit</code> (até 100), sem cursor/offset. Não dá pra auditar o board inteiro por essa tool hoje. Não abri card — não é um dos 4 audits deste skill, fica para decisão humana se vale um.</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>O que eu NÃO consegui checar</h2>
+  <ul>
+    <li>Os cards do board além dos primeiros 100 retornados (sem paginação disponível na tool).</li>
+    <li><code>tooling:checkhint-status-filter-compound-values</code> — pulei deliberadamente o CheckHint original (contém um token Notion <code>ntn_...</code> em texto plano); além disso o script está truncado/sintaticamente inválido, então nem daria pra rodar de verdade.</li>
+    <li>12 cards sem CheckHint algum — impossível verificar automaticamente se ainda são reais; deixei todos abertos.</li>
+    <li>2 cards com CheckHint truncado/quebrado (<code>resilience:silent-failure-core-modules</code>, o outro citado acima) — erro de sintaxe ao rodar, tratado como "não verificável", card deixado aberto.</li>
+    <li>Não testei se um agent container padrão (via <code>run_agent_async</code>) tem a mesma alcançabilidade de rede que este ambiente para os endpoints internos citados em CheckHints (127.0.0.1:9123, aw-app-mcp-gateway:9200) — rodei os testes diretamente neste ambiente, que pode ter acesso diferente.</li>
+  </ul>
+</div>
+
+</body>
+</html>
+]]>

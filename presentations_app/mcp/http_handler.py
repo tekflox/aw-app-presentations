@@ -34,6 +34,7 @@ import time
 from fastapi.concurrency import run_in_threadpool
 
 from .commented_file import generate_commented_file_html
+from ..normalize import normalize_presentation_html
 from ..storage import PresentationStore
 
 _MIME_MAP = {
@@ -294,7 +295,11 @@ img {{ max-width:100%; max-height:100vh; object-fit:contain; }}
         scale = float(args.get("scale") or 2.0)
         from .. import routes as routes_mod
         try:
-            await run_in_threadpool(routes_mod._render_html_to_png, p.html, output_path, width, height, scale)
+            # Same normalization the /html route applies — see the REST export
+            # endpoint in routes.py for why both paths go through it.
+            await run_in_threadpool(routes_mod._render_html_to_png,
+                                    normalize_presentation_html(p.html),
+                                    output_path, width, height, scale)
         except Exception as exc:
             unavailable = routes_mod._playwright_unavailable_reason(exc)
             return _err(req_id, unavailable or f"render failed: {exc}")

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inventário MCP — monolito × aw-workspace</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b24; --panel2:#1c2230; --line:#2a3242;
+    --fg:#e6eaf2; --dim:#9aa5b8; --faint:#6b7688;
+    --ok:#4ea88a; --warn:#d7a04a; --bad:#d1607a; --info:#5b8ff9; --new:#8a7fd6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--fg);
+    font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  #deck{height:100vh;display:flex;flex-direction:column}
+  .slide{display:none;flex:1;overflow-y:auto;padding:44px 56px 88px}
+  .slide.on{display:block;animation:fade .22s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+  h1{font-size:38px;line-height:1.15;font-weight:650;letter-spacing:-.02em;margin-bottom:14px}
+  h2{font-size:27px;line-height:1.2;font-weight:640;letter-spacing:-.015em;margin-bottom:20px}
+  h3{font-size:14px;font-weight:640;color:var(--dim);margin-bottom:10px;letter-spacing:.02em}
+  p{color:var(--dim);max-width:68ch;margin-bottom:12px}
+  strong{color:var(--fg);font-weight:620}
+  code{font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+    background:#212936;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#c9d4e8}
+  .lead{font-size:18px;color:var(--dim);max-width:70ch}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+  .card.accent{border-left:3px solid var(--info)}
+  .card.ok{border-left:3px solid var(--ok)}
+  .card.warn{border-left:3px solid var(--warn)}
+  .card.bad{border-left:3px solid var(--bad)}
+  .stat{font-size:40px;font-weight:660;letter-spacing:-.03em;line-height:1}
+  .stat.s-ok{color:var(--ok)} .stat.s-warn{color:var(--warn)}
+  .stat.s-bad{color:var(--bad)} .stat.s-new{color:var(--new)} .stat.s-info{color:var(--info)}
+  .stat-l{font-size:12.5px;color:var(--faint);margin-top:8px;line-height:1.4}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);font-weight:600;padding:0 10px 9px;border-bottom:1px solid var(--line)}
+  td{padding:8px 10px;border-bottom:1px solid #1e2531;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.n{font:12.5px ui-monospace,Menlo,monospace;color:var(--dim);text-align:right;width:52px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;
+    letter-spacing:.03em;white-space:nowrap}
+  .t-ok{background:rgba(78,168,138,.14);color:var(--ok)}
+  .t-warn{background:rgba(215,160,74,.14);color:var(--warn)}
+  .t-bad{background:rgba(209,96,122,.14);color:var(--bad)}
+  .t-new{background:rgba(138,127,214,.16);color:var(--new)}
+  ul{list-style:none} li{padding-left:18px;position:relative;margin-bottom:9px;color:var(--dim)}
+  li:before{content:"";position:absolute;left:2px;top:.62em;width:5px;height:5px;
+    border-radius:50%;background:var(--faint)}
+  li.p:before{background:var(--info)}
+  .bar{height:9px;border-radius:5px;background:#232b39;overflow:hidden;margin-top:6px}
+  .bar > i{display:block;height:100%;border-radius:5px}
+  .row{display:flex;align-items:baseline;gap:10px;justify-content:space-between}
+  .mono{font:12.5px ui-monospace,Menlo,monospace;color:#c9d4e8}
+  .note{font-size:12.5px;color:var(--faint);border-left:2px solid var(--line);padding-left:12px;margin-top:16px}
+  .wave{display:flex;gap:14px}
+  .wave > div{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;position:relative}
+  .wnum{position:absolute;top:-11px;left:20px;width:24px;height:24px;border-radius:50%;
+    display:grid;place-items:center;font-size:12px;font-weight:700;color:#0e1116}
+  nav{position:fixed;left:0;right:0;bottom:0;height:56px;background:rgba(14,17,22,.94);
+    border-top:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 24px;
+    backdrop-filter:blur(8px)}
+  nav button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+    border-radius:7px;padding:7px 15px;font-size:13px;cursor:pointer;font-family:inherit}
+  nav button:hover{background:#242d3d} nav button:disabled{opacity:.32;cursor:default}
+  .dots{display:flex;gap:6px;margin-left:auto;align-items:center}
+  .dot{width:7px;height:7px;border-radius:50%;background:#333d4f;cursor:pointer;border:none;padding:0}
+  .dot.on{background:var(--info);width:20px;border-radius:4px}
+  .pos{font:12px ui-monospace,Menlo,monospace;color:var(--faint);min-width:46px}
+  .stitle{font-size:12px;color:var(--faint);margin-left:4px}
+</style>
+</head>
+<body>
+<div id="deck">
+
+<!-- 1 -->
+<section class="slide on">
+  <div class="eyebrow">aw-workspace · 18 de agosto de 2026</div>
+  <h1>Inventário MCP<br>monolito × aw-workspace</h1>
+  <p class="lead">O que o <code>agentic-workspace</code> tinha, o que já veio pra cá,
+  e o que ainda está no chão. Levantado do registro canônico dos dois lados — não de memória.</p>
+  <div class="grid g4" style="margin-top:34px">
+    <div class="card"><div class="stat s-info">50</div><div class="stat-l">upstreams MCP registrados no monolito</div></div>
+    <div class="card"><div class="stat s-ok">22</div><div class="stat-l">upstreams vivos no aw-gateway</div></div>
+    <div class="card"><div class="stat s-ok">503</div><div class="stat-l">tools servidas hoje no aw-workspace</div></div>
+    <div class="card"><div class="stat s-bad">159</div><div class="stat-l">tools do monolito sem equivalente aqui</div></div>
+  </div>
+  <div class="note">O pedido original era achar gaps no <strong>agents-platform legacy</strong>.
+  Lá não há gap nenhum — o gap real estava em volta.</div>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <div class="eyebrow">Método</div>
+  <h2>Como isso foi levantado</h2>
+  <div class="grid g2">
+    <div class="card accent">
+      <h3>Lado do monolito</h3>
+      <ul>
+        <li class="p">Acesso ao bare metal via <code>remote-hosts exec-wait --host bare-metal-privileged</code>, e de lá <code>docker exec aw-sandbox</code></li>
+        <li class="p">Fonte da verdade é <code>src/config/mcp.json</code> — <strong>não</strong> o <code>.mcp.json</code> da raiz, que só aponta pro gateway e lista 4 entradas</li>
+        <li class="p">Tools extraídas por AST de cada <code>src/mcp/*.py</code>; os servers misturam 3 estilos de declaração</li>
+      </ul>
+    </div>
+    <div class="card accent">
+      <h3>Lado do aw-workspace</h3>
+      <ul>
+        <li class="p"><code>tools/list</code> chamado direto no <code>aw-app-mcp-gateway:9200</code></li>
+        <li class="p">Isso é o que os agentes <strong>realmente enxergam</strong>, não o que os manifestos prometem — a diferença entre os dois virou um achado</li>
+        <li class="p">6 tools do agents-platform chamadas ao vivo pra confirmar que respondem</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">Diff do <code>agent_mcp.py</code> legacy × multitenant feito linha a linha, com o arquivo
+  puxado pro <code>.tmp/ap-legacy-gap/</code>.</div>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <div class="eyebrow">Achado 1 · a pergunta original</div>
+  <h2>agents-platform legacy: zero gaps</h2>
+  <div class="grid g3" style="margin-bottom:26px">
+    <div class="card ok"><div class="stat s-ok">82</div><div class="stat-l">tools no legacy</div></div>
+    <div class="card ok"><div class="stat s-ok">82</div><div class="stat-l">no multitenant</div></div>
+    <div class="card ok"><div class="stat s-ok">82</div><div class="stat-l">no aw-app-agents-platform-runners</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Evidência</h3>
+      <ul>
+        <li>Conjunto idêntico, nome por nome</li>
+        <li>Diff legacy × MT = 54 linhas, <strong>só reordenação</strong> do bloco <code>supervise</code></li>
+        <li>Backend MT tem todos os módulos do legacy <strong>mais</strong> <code>runners.py</code> e <code>me.py</code></li>
+        <li>Legacy congelado: <code>agent_mcp.py</code> parado em 31/jul, HEAD em 03/ago. O port foi em 02/ago e seguiu evoluindo</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>As tools citadas já existem e funcionam</h3>
+      <ul>
+        <li><code>rename_session</code> · <code>list_sessions</code></li>
+        <li><code>cancel_run</code> · <code>cancel_all_runs</code></li>
+        <li><code>list_runs</code> · <code>get_run_detail</code></li>
+        <li><code>run_tree</code> · <code>peek_run_output</code></li>
+      </ul>
+      <div class="note" style="margin-top:14px">Testadas ao vivo: <code>list_sessions</code>, <code>list_targets</code>,
+      <code>lessons_metrics</code>, <code>list_callers</code>, <code>get_retro_score_weights</code>, <code>supervisor_status</code> — todas OK.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <div class="eyebrow">Situação · portados</div>
+  <h2>O que já veio inteiro</h2>
+  <table>
+    <thead><tr><th>monolito</th><th>aw-workspace</th><th class="n">mono</th><th class="n">aw</th><th>estado</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">aw-architecture</td><td class="mono">architecture</td><td class="n">40</td><td class="n">41</td><td><span class="tag t-ok">à frente</span></td></tr>
+      <tr><td class="mono">aw-ux-proto</td><td class="mono">aw_ux_proto</td><td class="n">21</td><td class="n">21</td><td><span class="tag t-ok">completo</span></td></tr>
+      <tr><td class="mono">aw-whiteboard</td><td class="mono">whiteboard</td><td class="n">16</td><td class="n">18</td><td><span class="tag t-ok">à frente</span></td></tr>
+      <tr><td class="mono">aw-presentation</td><td class="mono">aw_presentation</td><td class="n">8</td><td class="n">8</td><td><span class="tag t-ok">completo</span></td></tr>
+      <tr><td class="mono">aw-whatsapp</td><td class="mono">whatsapp</td><td class="n">6</td><td class="n">7</td><td><span class="tag t-ok">à frente</span></td></tr>
+      <tr><td class="mono">aw-knowledge-base</td><td class="mono">kb</td><td class="n">5</td><td class="n">5</td><td><span class="tag t-ok">completo</span></td></tr>
+      <tr><td class="mono">aw-google-maps</td><td class="mono">aw_google_maps</td><td class="n">4</td><td class="n">4</td><td><span class="tag t-ok">completo</span></td></tr>
+      <tr><td class="mono">aw-open-meteo</td><td class="mono">weather</td><td class="n">2</td><td class="n">2</td><td><span class="tag t-ok">completo</span></td></tr>
+      <tr><td class="mono">aw-vscode · aw-diff-tool</td><td class="mono">vscode · aw_diff_tool</td><td class="n">1+1</td><td class="n">1+1</td><td><span class="tag t-ok">completo</span></td></tr>
+      <tr><td class="mono">notion · playwright · home-assistant<br>google-workspace · blender</td><td class="mono">idem</td><td class="n">ext</td><td class="n">174</td><td><span class="tag t-ok">completo</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <div class="eyebrow">Situação · portados com buraco</div>
+  <h2>Vieram, mas incompletos</h2>
+  <div class="grid g3">
+    <div class="card warn">
+      <div class="row"><h3 style="margin:0">aw-kanban</h3><span class="tag t-warn">−4</span></div>
+      <div class="bar" style="margin-bottom:14px"><i style="width:82%;background:var(--warn)"></i></div>
+      <ul style="font-size:13px">
+        <li><code>run_ready_cards</code></li>
+        <li><code>invoke_kanban_agent</code></li>
+        <li><code>attach_kanban_file</code></li>
+        <li><code>attach_kanban_presentation</code></li>
+      </ul>
+      <div class="note">As duas primeiras são as que fazem o board <strong>acionar</strong> agente. Sem elas o Kanban só descreve trabalho, não dispara.</div>
+    </div>
+    <div class="card warn">
+      <div class="row"><h3 style="margin:0">aw-crispal</h3><span class="tag t-warn">−7</span></div>
+      <div class="bar" style="margin-bottom:14px"><i style="width:77%;background:var(--warn)"></i></div>
+      <ul style="font-size:13px">
+        <li><code>start_bank_link</code></li>
+        <li><code>list_accounts</code> · <code>list_institutions</code></li>
+        <li><code>list_transactions</code></li>
+        <li><code>deploy_file</code></li>
+        <li><code>restore_dev_database</code> (+status)</li>
+      </ul>
+      <div class="note">Bloco de open-banking inteiro fora, mais 3 de DEV.</div>
+    </div>
+    <div class="card warn">
+      <div class="row"><h3 style="margin:0">aw-secrets</h3><span class="tag t-warn">−1</span></div>
+      <div class="bar" style="margin-bottom:14px"><i style="width:88%;background:var(--warn)"></i></div>
+      <ul style="font-size:13px"><li><code>request_secret</code></li></ul>
+      <div class="note">O app daqui tem 4 tools contra 2 do monolito — ganhou coisa, mas perdeu essa.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <div class="eyebrow">O gap real · 159 tools em 20 servers</div>
+  <h2>Não portados</h2>
+  <div class="grid g2">
+    <div>
+      <table>
+        <tbody>
+          <tr><td class="n">32</td><td class="mono">aw-mobile-app</td><td style="color:var(--faint);font-size:12.5px">HealthKit, GPS, watch dumps, push, meta display</td></tr>
+          <tr><td class="n">27</td><td class="mono">aw-app-builder</td><td style="color:var(--faint);font-size:12.5px">criar/rodar/parar app, portas, deps, logs</td></tr>
+          <tr><td class="n">17</td><td class="mono">aw-debugger</td><td style="color:var(--faint);font-size:12.5px">DAP: breakpoints, step, stack, variables</td></tr>
+          <tr><td class="n">17</td><td class="mono">npc-control</td><td style="color:var(--faint);font-size:12.5px">Roblox / Genie</td></tr>
+          <tr><td class="n">13</td><td class="mono">aw-android-studio</td><td style="color:var(--faint);font-size:12.5px">ADB: tap, swipe, screenshot, push</td></tr>
+          <tr><td class="n">9</td><td class="mono">aw-remote-agent</td><td style="color:var(--faint);font-size:12.5px">exec + arquivos em host remoto</td></tr>
+          <tr><td class="n">8</td><td class="mono">aw-tasks</td><td style="color:var(--faint);font-size:12.5px">create/update/delete/run/open task</td></tr>
+          <tr><td class="n">8</td><td class="mono">roblox-gui</td><td style="color:var(--faint);font-size:12.5px">Roblox</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tbody>
+          <tr><td class="n">5</td><td class="mono">aw-plaud</td><td style="color:var(--faint);font-size:12.5px">transcrição / áudio</td></tr>
+          <tr><td class="n">5</td><td class="mono">aw-notrilho</td><td style="color:var(--faint);font-size:12.5px">movimentos financeiros</td></tr>
+          <tr><td class="n">5</td><td class="mono">aw-tripo3d</td><td style="color:var(--faint);font-size:12.5px">geração 3D</td></tr>
+          <tr><td class="n">3</td><td class="mono">aw-lifestyle</td><td style="color:var(--faint);font-size:12.5px">busca de voo</td></tr>
+          <tr><td class="n">2</td><td class="mono">aw-cli</td><td style="color:var(--faint);font-size:12.5px"><code>aw_run</code> · <code>aw_help</code></td></tr>
+          <tr><td class="n">2+2</td><td class="mono">genie-kanban · genie-npc</td><td style="color:var(--faint);font-size:12.5px">Genie</td></tr>
+          <tr><td class="n">1×4</td><td class="mono">feed-subscriber · resize-image<br>hetzner-deploy · meta-display-deploy</td><td style="color:var(--faint);font-size:12.5px">utilitários de uma tool</td></tr>
+        </tbody>
+      </table>
+      <div class="card" style="margin-top:16px">
+        <h3>Externos sem equivalente</h3>
+        <p style="font-size:13px;margin:0"><code>api_caller</code> · <code>penpot</code> · <code>aw-penpot</code> ·
+        <code>signoz</code> · <code>aw-flights</code> · <code>crispal-wordpress-*</code> ·
+        <code>playwright-local</code> · <code>playwright-windows</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <div class="eyebrow">Achado 2 · colateral</div>
+  <h2>Um app com MCP escrito e morto no ar</h2>
+  <div class="card bad" style="margin-bottom:22px">
+    <p style="font-size:17px;color:var(--fg);max-width:76ch;margin-bottom:14px">
+      <code>aw-app-remote-host-cli</code> declara <strong>contributes.mcp</strong> no manifesto
+      e serve <strong>zero tools</strong> no gateway — não aparece entre os 22 upstreams vivos.
+    </p>
+    <p style="margin:0">Ou seja: o equivalente do <code>aw-remote-agent</code> (9 tools de exec e arquivos
+    em host remoto) <strong>já foi escrito</strong> e nenhum agente consegue chamar.</p>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Causa provável</h3>
+      <p style="font-size:13.5px;margin:0">Padrão já conhecido aqui: <code>contributes.mcp</code> não registra
+      upstream sozinho — o app precisa escrever o próprio <code>mcp.json</code>. Comparar com
+      <code>aw-app-devctl</code>, que declara a mesma coisa e <em>aparece</em> no gateway, deve fechar o diagnóstico.</p>
+    </div>
+    <div class="card">
+      <h3>Por que isso importa mais que a lista</h3>
+      <p style="font-size:13.5px;margin:0">É degradação silenciosa: manifesto verde, health verde,
+      surface vazia. Se acontece com um app, vale varrer os outros que declaram <code>mcp</code> —
+      o inventário de manifestos e o inventário do gateway não batem.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <div class="eyebrow">Contrapeso</div>
+  <h2>O que o aw-workspace ganhou</h2>
+  <p class="lead" style="margin-bottom:26px">Nem tudo é dívida — três upstreams aqui não existiam no monolito.</p>
+  <div class="grid g3">
+    <div class="card"><div class="stat s-new">29</div><div class="stat-l"><code>codegraphcontext</code><br>grafo de código de todos os repos, consultável</div></div>
+    <div class="card"><div class="stat s-new">9</div><div class="stat-l"><code>devctl_browser</code><br>controle de browser via devctl</div></div>
+    <div class="card"><div class="stat s-new">9</div><div class="stat-l"><code>mini_browser</code><br>browser leve embutido</div></div>
+  </div>
+  <div class="card" style="margin-top:24px">
+    <div class="row" style="margin-bottom:8px"><span style="color:var(--fg);font-weight:620">Saldo líquido de tools servidas</span><span class="mono">503 aqui</span></div>
+    <div class="bar" style="height:12px"><i style="width:100%;background:linear-gradient(90deg,var(--ok),var(--new))"></i></div>
+    <p style="font-size:13px;margin-top:12px;margin-bottom:0">O aw-workspace serve <strong>mais</strong> tools que o monolito jamais
+    expôs de uma vez — o gateway de lá filtra por allowlist. A dívida não é de volume, é de <em>quais</em> capacidades ficaram pra trás.</p>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <div class="eyebrow">Proposta</div>
+  <h2>Plano em três ondas</h2>
+  <div class="wave" style="margin-top:26px">
+    <div>
+      <div class="wnum" style="background:var(--ok)">1</div>
+      <h3 style="margin-top:8px;color:var(--ok)">Consertar o que já existe</h3>
+      <ul style="font-size:13.5px">
+        <li><code>remote-host-cli</code> — 9 tools de graça, é só registrar o upstream</li>
+        <li>4 tools do <code>aw-kanban</code></li>
+      </ul>
+      <p style="font-size:12.5px;color:var(--faint);margin:14px 0 0">Menor esforço, maior retorno.
+      Nada aqui é código novo.</p>
+    </div>
+    <div>
+      <div class="wnum" style="background:var(--info)">2</div>
+      <h3 style="margin-top:8px;color:var(--info)">MCP do aw-tasks</h3>
+      <ul style="font-size:13.5px">
+        <li>8 tools no <code>aw-app-tasks</code></li>
+        <li>App já tem as rotas REST — é escrever o shim</li>
+      </ul>
+      <p style="font-size:12.5px;color:var(--faint);margin:14px 0 0">É o gap que hoje trava agente
+      mexer em tarefa agendada por tool.</p>
+    </div>
+    <div>
+      <div class="wnum" style="background:var(--warn)">3</div>
+      <h3 style="margin-top:8px;color:var(--warn)">app-builder + debugger</h3>
+      <ul style="font-size:13.5px">
+        <li>44 tools, capacidade de verdade</li>
+        <li>Precisa de decisão sua antes</li>
+      </ul>
+      <p style="font-size:12.5px;color:var(--faint);margin:14px 0 0">O <code>app-builder</code> do monolito
+      assume o modelo de app <em>dele</em> — não é port, é reescrita contra o modelo daqui.</p>
+    </div>
+  </div>
+  <div class="note">Fora do plano até você dizer o contrário: Roblox/Genie (25 tools),
+  <code>notrilho</code>, <code>plaud</code>, <code>lifestyle</code>, <code>tripo3d</code>.</div>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <div class="eyebrow">Honestidade</div>
+  <h2>O que este levantamento não cobre</h2>
+  <div class="grid g2">
+    <div class="card bad">
+      <h3>Números possivelmente subestimados</h3>
+      <ul>
+        <li><code>roblox-studio-mcp-official</code> deu <strong>0 tools</strong> no parser — estilo de declaração
+        que o extrator AST não pega. O total de 159 é piso, não teto.</li>
+        <li>Os 306 do monolito vêm do <em>código no repo</em>, não de <code>tools/list</code> ao vivo —
+        o gateway de lá filtra por allowlist, então serve menos do que existe.</li>
+      </ul>
+    </div>
+    <div class="card bad">
+      <h3>Não verificado</h3>
+      <ul>
+        <li>Das 82 do agents-platform, só 6 foram chamadas ao vivo — todas read-only.
+        Tools de escrita e destrutivas não foram disparadas de propósito.</li>
+        <li>O mapeamento <code>aw-crispal-dev</code> → <code>aw_crispal</code> é palpite:
+        essas 3 tools podem ter virado outra coisa dentro do app de Crispal.</li>
+        <li>Checkout local do monolito é de 17/ago; o vivo no <code>aw-sandbox</code> pode divergir.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">Artefatos em <code>/opt/aw-workspace/.tmp/ap-legacy-gap/</code> —
+  <code>monolith_tools.json</code>, <code>aw_tools_raw.txt</code>, <code>inventario-mcp.md</code>, scripts de extração e comparação.</div>
+</section>
+
+</div>
+
+<nav>
+  <button id="prev">←</button>
+  <button id="next">→</button>
+  <span class="pos" id="pos">1 / 10</span>
+  <span class="stitle" id="stitle"></span>
+  <div class="dots" id="dots"></div>
+</nav>
+
+<script>
+(function(){
+  var S=[].slice.call(document.querySelectorAll('.slide')), i=0;
+  var titles=['Capa','Método','Legacy: 0 gaps','Portados','Incompletos','Não portados',
+              'App morto no ar','Ganhos','Plano','Limitações'];
+  var dots=document.getElementById('dots');
+  S.forEach(function(_,k){
+    var b=document.createElement('button'); b.className='dot'+(k?'':' on');
+    b.title=titles[k]; b.onclick=function(){go(k)}; dots.appendChild(b);
+  });
+  function go(n){
+    i=Math.max(0,Math.min(S.length-1,n));
+    S.forEach(function(s,k){s.classList.toggle('on',k===i)});
+    [].forEach.call(dots.children,function(d,k){d.classList.toggle('on',k===i)});
+    document.getElementById('pos').textContent=(i+1)+' / '+S.length;
+    document.getElementById('stitle').textContent=titles[i];
+    document.getElementById('prev').disabled=(i===0);
+    document.getElementById('next').disabled=(i===S.length-1);
+    S[i].scrollTop=0;
+  }
+  document.getElementById('prev').onclick=function(){go(i-1)};
+  document.getElementById('next').onclick=function(){go(i+1)};
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(i+1)}
+    if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(i-1)}
+    if(e.key==='Home')go(0); if(e.key==='End')go(S.length-1);
+  });
+  go(0);
+})();
+</script>
+</body>
+</html>

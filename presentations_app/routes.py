@@ -32,26 +32,10 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket, Web
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse
 
+from .normalize import normalize_presentation_html
 from .storage import PresentationStore
 
 _log = logging.getLogger("presentations_app.routes")
-
-_VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1">'
-
-
-def _with_viewport_meta(html: str) -> str:
-    """Inject the mobile viewport meta tag into presentations authored before
-    it was part of the SKILL.md template — without it, mobile browsers lay
-    the page out at desktop width and the dark-theme body reads as a blank
-    black screen."""
-    if "viewport" in html.lower():
-        return html
-    lower = html.lower()
-    head_idx = lower.find("<head>")
-    if head_idx != -1:
-        insert_at = head_idx + len("<head>")
-        return html[:insert_at] + _VIEWPORT_META + html[insert_at:]
-    return _VIEWPORT_META + html
 
 
 def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
@@ -116,8 +100,14 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         scale = float((data or {}).get("scale") or 2.0)
 
         try:
-            await run_in_threadpool(_render_html_to_png, p.html, output_path,
-                                    width, height, scale)
+            # Normalized like the served page, not raw: at the 1280px default
+            # the media query cannot fire, so this is a no-op today — but it
+            # keeps ONE normalization path instead of two, and an export
+            # explicitly asked for at width=390 then renders what a phone
+            # would actually get instead of silently diverging from it.
+            await run_in_threadpool(_render_html_to_png,
+                                    normalize_presentation_html(p.html),
+                                    output_path, width, height, scale)
         except Exception as exc:
             unavailable = _playwright_unavailable_reason(exc)
             if unavailable:
@@ -154,7 +144,7 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         p = store.get(presentation_id)
         if p is None:
             raise HTTPException(status_code=404, detail="Presentation not found")
-        return HTMLResponse(content=_with_viewport_meta(p.html))
+        return HTMLResponse(content=normalize_presentation_html(p.html))
 
     @api.post("/presentations/{presentation_id}/share")
     async def create_share(presentation_id: str, data: dict = Body(default={})):
