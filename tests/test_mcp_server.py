@@ -57,8 +57,14 @@ class FakeCtx:
 
 
 @pytest.fixture
-def client(tmp_path):
-    store = PresentationStore(FakeCtx())
+def store():
+    return PresentationStore(FakeCtx())
+
+
+@pytest.fixture
+def client(store, tmp_path):
+    # Exposed as its own fixture so a test can read back the HTML a tool
+    # generated — the MCP response only carries a confirmation string.
     app = routes_mod.build_app(store, str(tmp_path))
     return TestClient(app)
 
@@ -152,6 +158,40 @@ def test_commented_file_renders_and_stores(client):
     })
     assert resp.json()["result"]["isError"] is False
     assert "review-1" in resp.json()["result"]["content"][0]["text"]
+
+
+def test_commented_file_html_is_readable_on_a_phone(client, store):
+    _call(client, "commented_file", {
+        "id": "review-mobile",
+        "files": [{
+            "file_path": str(ROOT / "aw-app.json"),
+            "comments": [{"start": 1, "end": 1, "text": "x", "severity": "info"}],
+        }],
+    })
+    html = store.get("review-mobile").html
+
+    assert 'name="viewport"' in html
+    assert "@media (max-width: 640px)" in html
+    # ONE scroll container for the listing...
+    assert ".code-container { overflow-x: auto;" in html
+    # ...and not one per line: `.lc { overflow-x: auto }` scrolled each line
+    # independently, which is the regression this guards.
+    lc_rule = html.split(".code-line .lc {")[1].split("}")[0]
+    assert "overflow-x" not in lc_rule, lc_rule
+
+
+def test_show_image_html_is_readable_on_a_phone(client, store, tmp_path):
+    img = tmp_path / "shot.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    _call(client, "show_image", {"path": str(img), "id": "img-mobile"})
+    html = store.get("img-mobile").html
+
+    # Pinch-zoom is the feature here, hence maximum-scale rather than the
+    # default meta the server injects everywhere else.
+    assert 'name="viewport"' in html
+    assert "maximum-scale=5" in html
+    # dvh with a vh fallback declaration ahead of it for older engines.
+    assert "min-height:100vh; min-height:100dvh;" in html
 
 
 def test_commented_file_requires_files(client):

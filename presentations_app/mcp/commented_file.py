@@ -56,9 +56,14 @@ def generate_commented_file_html(files_data):
     if len(files_data) > 1:
         tabs_bar = f'<div class="tabs-bar">{tabs_html}</div>'
 
+    # This document's viewport meta is declared here rather than relying on
+    # the server-side net in presentations_app/normalize.py: this is one of
+    # the two presentations whose HTML the app owns outright, and a document
+    # that states its own contract does not depend on a later rewrite of
+    # someone else's detection logic.
     return f"""<!DOCTYPE html>
 <html>
-<head><style>{css}</style></head>
+<head><meta name="viewport" content="width=device-width, initial-scale=1"><style>{css}</style></head>
 <body>
 {tabs_bar}
 {content_html}
@@ -161,12 +166,16 @@ def _css():
     .sev-badge.sev-info { background: rgba(56,189,248,0.15); color: #38bdf8; }
     .sev-badge.sev-praise { background: rgba(74,222,128,0.15); color: #4ade80; }
 
-    /* Code lines */
-    .code-container { }
-    .code-line { display: flex; min-height: 20px; line-height: 20px; transition: background 0.1s; }
+    /* Code lines — ONE horizontal scroll container for the whole listing.
+       Per-line `overflow-x: auto` on .lc gave every line its own independent
+       scrollbar: reading one long line scrolled that line only and left the
+       next one behind, which on a phone is unusable. The lines are sized to
+       their content and scroll together instead. */
+    .code-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .code-line { display: flex; min-height: 20px; line-height: 20px; transition: background 0.1s; width: max-content; min-width: 100%; }
     .code-line:hover { background: #16171d; }
     .code-line .ln { width: 48px; text-align: right; padding: 0 8px; color: #3f3f46; flex-shrink: 0; font-size: 11px; user-select: none; }
-    .code-line .lc { flex: 1; padding: 0 12px; white-space: pre; overflow-x: auto; font-size: 13px; color: #a1a1aa; }
+    .code-line .lc { flex: 1; padding: 0 12px; white-space: pre; font-size: 13px; color: #a1a1aa; }
 
     /* Highlighted lines (have comments) */
     .code-line.highlighted { background: rgba(99,102,241,0.06); }
@@ -200,6 +209,16 @@ def _css():
     .file-footer { display: flex; gap: 16px; padding: 8px 16px; background: #18191e; border-top: 1px solid #27282e; font-size: 11px; color: #71717a; align-items: center; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 
     .hidden { display: none !important; }
+
+    /* Narrow screens. Same 640px breakpoint as normalize.py's fallback net,
+       the authoring template and the viewer's action bar. 12px is the floor:
+       monospace below that stops being readable, and iOS Safari starts
+       auto-zooming. */
+    @media (max-width: 640px) {
+        body { font-size: 12px; }
+        .code-line .ln { width: 34px; padding: 0 4px; }
+        .comment-block { margin-left: 34px; }
+    }
     """
 
 

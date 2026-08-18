@@ -273,10 +273,19 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
             b64 = base64.b64encode(f.read()).decode()
         title = args.get("title") or os.path.basename(file_path)
         presentation_id = args.get("id") or f"img-{os.path.basename(file_path).replace('.', '-')}"
+        # maximum-scale=5 rather than the default this app injects elsewhere:
+        # for an image viewer, pinch-zoom IS the feature. Declaring a viewport
+        # here also tells normalize_presentation_html to leave this document's
+        # own meta alone.
+        #
+        # 100dvh, not 100vh: on mobile Safari 100vh is the *large* viewport
+        # (URL bar hidden), so with the bar showing the image was clipped below
+        # the fold — and `overflow: auto` on a centred flex parent gives back
+        # no usable scroll to recover it. min-height so the body can still grow.
         html = f'''<!DOCTYPE html>
-<html><head><style>
-body {{ margin:0; background:#0a0a0f; display:flex; align-items:center; justify-content:center; height:100vh; overflow:auto; }}
-img {{ max-width:100%; max-height:100vh; object-fit:contain; }}
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><style>
+body {{ margin:0; padding:0; background:#0a0a0f; display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; }}
+img {{ max-width:100%; max-height:100vh; max-height:100dvh; object-fit:contain; }}
 </style></head><body>
 <img src="data:{mime};base64,{b64}" alt="{title}" />
 </body></html>'''
