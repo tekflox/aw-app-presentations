@@ -46,6 +46,7 @@ create_presentation(
 ```html
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px; background: #0d1117; color: #c9d1d9; }
   .header { border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 24px; }

@@ -36,6 +36,23 @@ from .storage import PresentationStore
 
 _log = logging.getLogger("presentations_app.routes")
 
+_VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+
+
+def _with_viewport_meta(html: str) -> str:
+    """Inject the mobile viewport meta tag into presentations authored before
+    it was part of the SKILL.md template — without it, mobile browsers lay
+    the page out at desktop width and the dark-theme body reads as a blank
+    black screen."""
+    if "viewport" in html.lower():
+        return html
+    lower = html.lower()
+    head_idx = lower.find("<head>")
+    if head_idx != -1:
+        insert_at = head_idx + len("<head>")
+        return html[:insert_at] + _VIEWPORT_META + html[insert_at:]
+    return _VIEWPORT_META + html
+
 
 def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
     api = FastAPI()
@@ -137,7 +154,7 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         p = store.get(presentation_id)
         if p is None:
             raise HTTPException(status_code=404, detail="Presentation not found")
-        return HTMLResponse(content=p.html)
+        return HTMLResponse(content=_with_viewport_meta(p.html))
 
     @api.post("/presentations/{presentation_id}/share")
     async def create_share(presentation_id: str, data: dict = Body(default={})):
