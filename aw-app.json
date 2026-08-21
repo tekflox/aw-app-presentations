@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "presentations",
   "name": "Presentations",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "HTML presentations created by agents (reports, diagrams, code reviews, images) \u2014 top-bar gallery nav + a window that renders each presentation. Replaces the monolith's /ws/presentations feature and the aw-frontend static PresentationNav. Diff viewing lives in the separate aw-app-diff-tool.",
   "tier": "inprocess",
   "requires_ui_refresh": true,
@@ -53,13 +53,14 @@
       {
         "id": "aw-presentation",
         "path": "skills/aw-presentation/SKILL.md",
-        "description": "How to create visual presentations from an agent (create_presentation, commented_file, show_image, export_presentation_to_image, share_presentation) \u2014 analysis reports, diagrams, code reviews, images. Diffs are handled by aw-diff-tool's own skill."
+        "description": "How to create visual presentations from an agent (create_presentation, create_presentation_from_file, commented_file, show_image, export_presentation_to_image, share_presentation) \u2014 analysis reports, diagrams, code reviews, images. Diffs are handled by aw-diff-tool's own skill."
       }
     ],
     "mcp": {
       "reload_on_save": true,
       "provides": [
         "create_presentation",
+        "create_presentation_from_file",
         "update_presentation",
         "delete_presentation",
         "list_presentations",

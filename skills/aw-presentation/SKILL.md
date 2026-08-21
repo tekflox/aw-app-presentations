@@ -122,6 +122,60 @@ what actually makes the page readable on a phone.
 
 Common patterns: log analysis (metrics at top, findings as cards), architecture (CSS/SVG boxes + dependency tables), debugging (stack traces in `pre`, timeline of events), performance (badges, before/after tables), planning (numbered steps, file lists, trade-off cards).
 
+**Inline vs from file — which tool to call:**
+
+- **`create_presentation` (inline `html`)** — for content you are composing right
+  now, in this turn, as you write the tool call. Analysis write-ups, diagrams,
+  reports you're drafting live.
+- **`create_presentation_from_file` (`path`)** — for content that already
+  exists as a file, especially one a script generated. Pasting a 12KB
+  script-generated HTML report into a tool call wastes context and is fragile
+  (the content was generated, not authored — a stray edit while copying it in
+  silently changes what ships). Point the tool at the file instead. See
+  section 1b below for the full contract (accepted extensions, guardrails).
+
+---
+
+### 1b. From a file — `create_presentation_from_file`
+
+Create a presentation by reading its content from a file already on disk,
+instead of inline. Reach for this whenever the content was produced by a
+script, a build step, or any process other than you typing it into the tool
+call right now.
+
+```
+create_presentation_from_file(
+  path="/opt/aw-workspace/.tmp/report.html",  # absolute, must resolve inside the workspace
+  title="Nightly Report",                     # optional, defaults to the filename
+  id="nightly-report"                         # optional, same upsert semantics as create_presentation
+)
+```
+
+**Dispatch by extension — content decides nothing, only the extension does:**
+
+| Extension | Behavior |
+|---|---|
+| `.html` / `.htm` | File content becomes the presentation's `html`, byte-for-byte unchanged. |
+| `.md` | Rendered as preformatted text inside this app's dark theme. This app carries no markdown-rendering dependency, so headings/bold/lists are **not** translated into real `<h1>`/`<strong>`/`<ul>` elements — the raw markdown text is shown as-is in a styled `<pre>` block. For a fully-styled report, author HTML directly (section 1) instead. |
+| `.png` `.jpg` `.jpeg` `.gif` `.svg` `.webp` | Delegates to the exact same code path `show_image` uses — no separate base64/encoding logic to drift out of sync. |
+| anything else | Rejected outright, with the accepted list in the error. The tool never guesses format from content. |
+
+**Guardrails (all enforced, not advisory):**
+
+- `path` must be **absolute** — a relative path is rejected.
+- The path is resolved with `realpath` (symlinks included) and must land
+  **inside** the workspace (`AW_WORKSPACE_CONTAINER_DIR`, default
+  `/opt/aw-workspace`). A symlink inside the workspace pointing outside it is
+  rejected too — the resolution happens before the containment check, not
+  after.
+- Size caps: **5MB** for `.html`/`.md`, **15MB** for images. A file over the
+  cap is rejected with the size read and the limit, rather than being loaded
+  into an iframe and hanging the tab.
+- A missing file or a read failure (permissions, etc.) is reported by path,
+  never as a stack trace.
+- Text files are read as UTF-8 with `errors="replace"` — one bad byte in a
+  generated report doesn't fail the whole call.
+
 ---
 
 ### 2. Code Review — `"/aw-presentation review"` or `"review this code"`

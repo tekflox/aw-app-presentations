@@ -42,6 +42,86 @@ _MIME_MAP = {
     ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp", ".bmp": "image/bmp",
 }
 
+# create_presentation_from_file: extension -> how to turn the file into the
+# stored `html`. ".bmp" is accepted by show_image's MIME map but NOT listed
+# here — the Kanban card's accepted-extensions list for this tool omits it,
+# so an unlisted extension (including .bmp) falls through to the explicit
+# "unsupported extension" error rather than being silently guessed from
+# content.
+_FROM_FILE_KIND = {
+    ".html": "html", ".htm": "html",
+    ".md": "markdown",
+    ".png": "image", ".jpg": "image", ".jpeg": "image",
+    ".gif": "image", ".svg": "image", ".webp": "image",
+}
+
+# 5MB for text (html/md) rendered into an iframe; 15MB for images before
+# base64 inflates them further. Both from the Kanban card's spec — a 50MB
+# HTML document loaded into an iframe hangs the tab, and nothing about that
+# failure points back at this tool.
+_FROM_FILE_TEXT_LIMIT_BYTES = 5 * 1024 * 1024
+_FROM_FILE_IMAGE_LIMIT_BYTES = 15 * 1024 * 1024
+
+
+def _workspace_root() -> str:
+    return os.path.realpath(os.environ.get("AW_WORKSPACE_CONTAINER_DIR", "/opt/aw-workspace"))
+
+
+def _resolve_in_workspace(path: str) -> str:
+    """Realpath of `path`, or raise ValueError if it isn't absolute or its
+    resolved target escapes the workspace root.
+
+    Resolves the symlink chain BEFORE the containment check, not after — a
+    symlink sitting inside the workspace that points outside it must fail
+    here, and comparing the pre-resolution path would miss exactly that.
+    """
+    if not os.path.isabs(path):
+        raise ValueError(f"path must be absolute, got: {path}")
+    real = os.path.realpath(path)
+    root = _workspace_root()
+    if real != root and not real.startswith(root + os.sep):
+        raise ValueError(f"path escapes the workspace ({root}): {path}")
+    return real
+
+
+def _markdown_to_html(text: str) -> str:
+    """This app carries no markdown-rendering dependency (by design — see
+    the tool description), so `.md` files are rendered as preformatted text
+    inside the same dark theme the rest of the app uses rather than pulling
+    one in just for this."""
+    import html as _html
+    escaped = _html.escape(text)
+    return f'''<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+body {{ font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 24px;
+       background: #0d1117; color: #c9d1d9; }}
+pre {{ white-space: pre-wrap; word-wrap: break-word; font-family: ui-monospace, monospace;
+      font-size: 14px; line-height: 1.6; }}
+</style></head><body>
+<pre>{escaped}</pre>
+</body></html>'''
+
+
+def _image_presentation_html(file_path: str, title: str) -> tuple[str, int]:
+    """Shared by `show_image` and `create_presentation_from_file` so the two
+    never drift into two divergent image-rendering paths for the same
+    formats."""
+    ext = os.path.splitext(file_path)[1].lower()
+    mime = _MIME_MAP.get(ext, "image/png")
+    with open(file_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    # See show_image's original comment: maximum-scale=5 (pinch-zoom IS the
+    # feature for an image viewer) and 100dvh with a vh fallback for older
+    # mobile engines.
+    html = f'''<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><style>
+body {{ margin:0; padding:0; background:#0a0a0f; display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; }}
+img {{ max-width:100%; max-height:100vh; max-height:100dvh; object-fit:contain; }}
+</style></head><body>
+<img src="data:{mime};base64,{b64}" alt="{title}" />
+</body></html>'''
+    return html, len(b64)
+
 
 def _ok(req_id, text):
     return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": text}], "isError": False}}
@@ -83,6 +163,40 @@ TOOLS_SCHEMA = [
                 },
             },
             "required": ["title", "html"],
+        },
+    },
+    {
+        "name": "create_presentation_from_file",
+        "description": (
+            "Create a presentation by reading its content from a file instead of pasting it inline. "
+            "Use this whenever the content already exists as a file or was produced by a script — "
+            "e.g. a generated HTML report — instead of copying it into the tool call. "
+            "Accepted extensions: .html/.htm (file content becomes the presentation's html, unchanged), "
+            ".md (rendered as preformatted text in this app's dark theme — no markdown-rendering "
+            "dependency is installed here, so formatting is not translated into real HTML elements), "
+            "and .png/.jpg/.jpeg/.gif/.svg/.webp (goes through the same code path as show_image). "
+            "Any other extension is rejected explicitly, listing the accepted ones. "
+            "`path` must be absolute and resolve (symlinks included) to somewhere inside this "
+            "workspace, or the call is rejected. Size limits: 5MB for .html/.md, 15MB for images."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Absolute path to the source file. Must resolve inside the workspace."},
+                "title": {"type": "string", "description": "Title for the presentation window. Defaults to the file's basename."},
+                "id": {"type": "string", "description": "Optional stable ID. If provided and a presentation with this ID exists, it will be updated instead of creating a new one."},
+                "visible": {"type": "boolean", "description": "If true (default), presentation appears in sidebar and auto-opens. If false, stored but hidden."},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional tag list (e.g. ['kind:summary', 'topic:churn']). Convention: 'key:value' strings.",
+                },
+                "silent": {
+                    "type": "boolean",
+                    "description": "If true, created/updated but does NOT auto-pop up in the UI. Default false (auto-opens). Defaults to true inside a task (AW_TASK_ID set).",
+                },
+            },
+            "required": ["path"],
         },
     },
     {
@@ -267,30 +381,66 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
         file_path = args["path"]
         if not os.path.isfile(file_path):
             return _err(req_id, f"File not found: {file_path}")
-        ext = os.path.splitext(file_path)[1].lower()
-        mime = _MIME_MAP.get(ext, "image/png")
-        with open(file_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode()
         title = args.get("title") or os.path.basename(file_path)
         presentation_id = args.get("id") or f"img-{os.path.basename(file_path).replace('.', '-')}"
-        # maximum-scale=5 rather than the default this app injects elsewhere:
-        # for an image viewer, pinch-zoom IS the feature. Declaring a viewport
-        # here also tells normalize_presentation_html to leave this document's
-        # own meta alone.
-        #
-        # 100dvh, not 100vh: on mobile Safari 100vh is the *large* viewport
-        # (URL bar hidden), so with the bar showing the image was clipped below
-        # the fold — and `overflow: auto` on a centred flex parent gives back
-        # no usable scroll to recover it. min-height so the body can still grow.
-        html = f'''<!DOCTYPE html>
-<html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5"><style>
-body {{ margin:0; padding:0; background:#0a0a0f; display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; }}
-img {{ max-width:100%; max-height:100vh; max-height:100dvh; object-fit:contain; }}
-</style></head><body>
-<img src="data:{mime};base64,{b64}" alt="{title}" />
-</body></html>'''
+        html, b64_len = _image_presentation_html(file_path, title)
         p = store.create(title, html, presentation_id=presentation_id)
-        return _ok(req_id, f"Image displayed: {p.id} ({title}, {len(b64)} bytes base64)")
+        return _ok(req_id, f"Image displayed: {p.id} ({title}, {b64_len} bytes base64)")
+
+    if name == "create_presentation_from_file":
+        raw_path = args.get("path", "")
+        if not raw_path:
+            return _err(req_id, "path is required")
+        try:
+            real_path = _resolve_in_workspace(raw_path)
+        except ValueError as e:
+            return _err(req_id, str(e))
+
+        ext = os.path.splitext(real_path)[1].lower()
+        kind = _FROM_FILE_KIND.get(ext)
+        if kind is None:
+            accepted = ", ".join(sorted(_FROM_FILE_KIND))
+            return _err(req_id, f"Unsupported extension {ext!r}. Accepted: {accepted}")
+
+        if not os.path.exists(real_path):
+            return _err(req_id, f"File not found: {raw_path}")
+        if not os.path.isfile(real_path):
+            return _err(req_id, f"Not a file: {raw_path}")
+
+        try:
+            size = os.path.getsize(real_path)
+        except OSError as e:
+            return _err(req_id, f"Cannot read {raw_path}: {e}")
+
+        title = args.get("title") or os.path.basename(real_path)
+        presentation_id = args.get("id")
+        tags = args.get("tags")
+        visible = args.get("visible", True)
+        silent = _silent_default(args)
+
+        if kind == "image":
+            if size > _FROM_FILE_IMAGE_LIMIT_BYTES:
+                return _err(req_id, f"File too large: {size} bytes (limit {_FROM_FILE_IMAGE_LIMIT_BYTES} bytes)")
+            try:
+                html, b64_len = _image_presentation_html(real_path, title)
+            except OSError as e:
+                return _err(req_id, f"Cannot read {raw_path}: {e}")
+            pid = presentation_id or f"img-{os.path.basename(real_path).replace('.', '-')}"
+            p = store.create(title, html, presentation_id=pid, visible=visible, tags=tags, silent=silent)
+            return _ok(req_id, f"Presentation created from file: {p.id} ({p.title}, {b64_len} bytes base64)")
+
+        if size > _FROM_FILE_TEXT_LIMIT_BYTES:
+            return _err(req_id, f"File too large: {size} bytes (limit {_FROM_FILE_TEXT_LIMIT_BYTES} bytes)")
+        try:
+            with open(real_path, "rb") as f:
+                raw = f.read()
+        except OSError as e:
+            return _err(req_id, f"Cannot read {raw_path}: {e}")
+        text = raw.decode("utf-8", errors="replace")
+
+        html = text if kind == "html" else _markdown_to_html(text)
+        p = store.create(title, html, presentation_id=presentation_id, visible=visible, tags=tags, silent=silent)
+        return _ok(req_id, f"Presentation created from file: {p.id} ({p.title})")
 
     if name == "export_presentation_to_image":
         p = store.get(args["presentation_id"])
