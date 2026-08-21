@@ -106,10 +106,13 @@ def _image_presentation_html(file_path: str, title: str) -> tuple[str, int]:
     """Shared by `show_image` and `create_presentation_from_file` so the two
     never drift into two divergent image-rendering paths for the same
     formats."""
+    import html as _html
+
     ext = os.path.splitext(file_path)[1].lower()
     mime = _MIME_MAP.get(ext, "image/png")
     with open(file_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
+    alt = _html.escape(title, quote=True)
     # See show_image's original comment: maximum-scale=5 (pinch-zoom IS the
     # feature for an image viewer) and 100dvh with a vh fallback for older
     # mobile engines.
@@ -118,7 +121,7 @@ def _image_presentation_html(file_path: str, title: str) -> tuple[str, int]:
 body {{ margin:0; padding:0; background:#0a0a0f; display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:100dvh; }}
 img {{ max-width:100%; max-height:100vh; max-height:100dvh; object-fit:contain; }}
 </style></head><body>
-<img src="data:{mime};base64,{b64}" alt="{title}" />
+<img src="data:{mime};base64,{b64}" alt="{alt}" />
 </body></html>'''
     return html, len(b64)
 

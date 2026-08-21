@@ -144,6 +144,37 @@ def test_show_image_missing_file_is_an_error(client):
     assert resp.json()["result"]["isError"] is True
 
 
+def test_show_image_title_with_double_quote_is_escaped_in_alt(client, store, tmp_path):
+    img = tmp_path / "shot.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfakepngbytes")
+    payload = 'x" onerror="alert(1)'
+    _call(client, "show_image", {"path": str(img), "title": payload, "id": "img-xss-quote"})
+
+    html = store.get("img-xss-quote").html
+    assert 'onerror="alert(1)"' not in html  # would be a live attribute if unescaped
+    assert 'alt="x&quot; onerror=&quot;alert(1)"' in html
+
+
+def test_show_image_title_with_angle_brackets_is_escaped_in_alt(client, store, tmp_path):
+    img = tmp_path / "shot.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfakepngbytes")
+    payload = "<script>alert(1)</script>"
+    _call(client, "show_image", {"path": str(img), "title": payload, "id": "img-xss-tag"})
+
+    html = store.get("img-xss-tag").html
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_show_image_normal_title_produces_unchanged_html(client, store, tmp_path):
+    img = tmp_path / "shot.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfakepngbytes")
+    _call(client, "show_image", {"path": str(img), "title": "Screenshot", "id": "img-normal"})
+
+    html = store.get("img-normal").html
+    assert 'alt="Screenshot" />' in html
+
+
 # ---- create_presentation_from_file -----------------------------------------
 
 
@@ -235,6 +266,22 @@ def test_create_presentation_from_file_image_goes_through_show_image_path(client
 
     # Same title + same bytes through the same helper -> byte-identical html.
     assert store.get("img-a").html == store.get("img-b").html
+
+
+def test_create_presentation_from_file_image_title_is_escaped(client, store, tmp_path, monkeypatch):
+    monkeypatch.setenv("AW_WORKSPACE_CONTAINER_DIR", str(tmp_path))
+    img = tmp_path / "shot.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\nfakepngbytes")
+    payload = 'x" onerror="alert(1)'
+
+    resp = _call(client, "create_presentation_from_file", {
+        "path": str(img), "title": payload, "id": "from-file-xss",
+    })
+    assert resp.json()["result"]["isError"] is False
+
+    html = store.get("from-file-xss").html
+    assert 'onerror="alert(1)"' not in html
+    assert 'alt="x&quot; onerror=&quot;alert(1)"' in html
 
 
 def test_create_presentation_from_file_upserts_by_id(client, store, tmp_path, monkeypatch):
