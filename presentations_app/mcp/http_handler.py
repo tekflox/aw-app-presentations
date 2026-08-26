@@ -143,6 +143,56 @@ def _silent_default(args: dict) -> bool:
     return bool(silent)
 
 
+# ── Per-profile namespace (injected by the MCP gateway) ──────────────────────
+#
+# A scoped gateway config (``/mcp/<name>``, see aw-mcp-gateway's ConfigGateway)
+# forces ``_gateway_presentation_namespace`` onto every call it routes here.
+# It is deliberately absent from every tool's public inputSchema: the caller
+# neither sees it nor can unset it, which is what makes it a boundary rather
+# than a convention. Unscoped callers (the plain ``/mcp`` endpoint, the REST
+# API, the UI) pass nothing and see everything, exactly as before.
+#
+# The namespace is stored as a plain ``namespace:<ns>`` tag, so it needs no
+# schema change and a presentation's scope is visible wherever tags already are.
+
+def _namespace(args: dict) -> str | None:
+    ns = (args or {}).get("_gateway_presentation_namespace")
+    return str(ns).strip() or None if ns else None
+
+
+def _ns_tag(namespace: str) -> str:
+    return f"namespace:{namespace}"
+
+
+def _with_ns(tags, namespace: str | None):
+    """The tag list to persist for a create/update in ``namespace``.
+
+    Returns ``tags`` untouched when unscoped. When scoped, the namespace tag is
+    appended — including to an explicit ``[]``, because "clear all tags" must
+    not be a way to launder a presentation out of its namespace."""
+    if not namespace:
+        return tags
+    merged = list(tags or [])
+    tag = _ns_tag(namespace)
+    if tag not in merged:
+        merged.append(tag)
+    return merged
+
+
+def _denied(store, presentation_id: str, namespace: str | None) -> str | None:
+    """An error message if ``namespace`` is set and the presentation exists
+    but is not in it; None when allowed. A presentation that does not exist
+    yet is allowed through — a scoped create will tag it on the way in."""
+    if not namespace or not presentation_id:
+        return None
+    existing = store.get(presentation_id)
+    if existing is None:
+        return None
+    if _ns_tag(namespace) not in (existing.tags or []):
+        return f"Presentation '{presentation_id}' is not in your namespace ('{namespace}')."
+    return None
+
+
 TOOLS_SCHEMA = [
     {
         "name": "create_presentation",
@@ -349,20 +399,45 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
 
     name = request.get("params", {}).get("name", "")
     args = request.get("params", {}).get("arguments", {}) or {}
+    ns = _namespace(args)
+
+    # One gate for every tool that names an existing presentation. Checked
+    # before the tool's own "not found" branch so a scoped caller cannot probe
+    # for the existence of ids outside its namespace.
+    target = {
+        "update_presentation": "id",
+        "delete_presentation": "id",
+        "export_presentation_to_image": "presentation_id",
+        "share_presentation": "presentation_id",
+        "create_presentation": "id",
+        "create_presentation_from_file": "id",
+        # show_image and commented_file DERIVE a default id (from the filename /
+        # the literal "code-review"), so they are checked further down against
+        # the id they actually write — checking args["id"] here would wave
+        # through the far more likely collision, the defaulted one.
+    }.get(name)
+    if target:
+        denied = _denied(store, str(args.get(target) or "").strip(), ns)
+        if denied:
+            return _err(req_id, denied)
 
     if name == "create_presentation":
         p = store.create(
             args["title"], args["html"], presentation_id=args.get("id"),
             visible=args.get("visible", True), session_id=args.get("session_id"),
-            tags=args.get("tags"), silent=_silent_default(args),
+            tags=_with_ns(args.get("tags"), ns), silent=_silent_default(args),
         )
         tag_note = f" tags={p.tags}" if p.tags else ""
         return _ok(req_id, f"Presentation created: {p.id} ({p.title}){tag_note}")
 
     if name == "update_presentation":
+        # tags=None means "leave unchanged", so only re-force the namespace tag
+        # when this call is actually replacing the tag list.
+        tags = args.get("tags")
         p = store.update(
             args["id"], title=args.get("title"), html=args.get("html"),
-            tags=args.get("tags"), silent=_silent_default(args),
+            tags=_with_ns(tags, ns) if tags is not None else None,
+            silent=_silent_default(args),
         )
         if p is None:
             return _err(req_id, f"Presentation not found: {args['id']}")
@@ -375,7 +450,8 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
         return _ok(req_id, f"Presentation deleted: {args['id']}")
 
     if name == "list_presentations":
-        presentations = store.list_presentations()
+        presentations = store.list_presentations(
+            tags_filter=[_ns_tag(ns)] if ns else None)
         items = [f"- {p['id']}: {p['title']}" for p in presentations]
         text = f"{len(presentations)} presentations:\n" + "\n".join(items) if items else "No presentations"
         return _ok(req_id, text)
@@ -386,8 +462,12 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
             return _err(req_id, f"File not found: {file_path}")
         title = args.get("title") or os.path.basename(file_path)
         presentation_id = args.get("id") or f"img-{os.path.basename(file_path).replace('.', '-')}"
+        denied = _denied(store, presentation_id, ns)
+        if denied:
+            return _err(req_id, denied)
         html, b64_len = _image_presentation_html(file_path, title)
-        p = store.create(title, html, presentation_id=presentation_id)
+        p = store.create(title, html, presentation_id=presentation_id,
+                         tags=_with_ns(None, ns))
         return _ok(req_id, f"Image displayed: {p.id} ({title}, {b64_len} bytes base64)")
 
     if name == "create_presentation_from_file":
@@ -429,7 +509,11 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
             except OSError as e:
                 return _err(req_id, f"Cannot read {raw_path}: {e}")
             pid = presentation_id or f"img-{os.path.basename(real_path).replace('.', '-')}"
-            p = store.create(title, html, presentation_id=pid, visible=visible, tags=tags, silent=silent)
+            denied = _denied(store, pid, ns)
+            if denied:
+                return _err(req_id, denied)
+            p = store.create(title, html, presentation_id=pid, visible=visible,
+                             tags=_with_ns(tags, ns), silent=silent)
             return _ok(req_id, f"Presentation created from file: {p.id} ({p.title}, {b64_len} bytes base64)")
 
         if size > _FROM_FILE_TEXT_LIMIT_BYTES:
@@ -442,7 +526,8 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
         text = raw.decode("utf-8", errors="replace")
 
         html = text if kind == "html" else _markdown_to_html(text)
-        p = store.create(title, html, presentation_id=presentation_id, visible=visible, tags=tags, silent=silent)
+        p = store.create(title, html, presentation_id=presentation_id, visible=visible,
+                         tags=_with_ns(tags, ns), silent=silent)
         return _ok(req_id, f"Presentation created from file: {p.id} ({p.title})")
 
     if name == "export_presentation_to_image":
@@ -474,10 +559,13 @@ async def handle_request(request: dict, *, store: PresentationStore, export_dir:
             return _err(req_id, "No files provided")
         html = generate_commented_file_html(files)
         presentation_id = args.get("id", "code-review")
+        denied = _denied(store, presentation_id, ns)
+        if denied:
+            return _err(req_id, denied)
         file_names = ", ".join(os.path.basename(f["file_path"]) for f in files)
         total_comments = sum(len(f.get("comments", [])) for f in files)
         title = args.get("title") or f"Review: {file_names}"
-        p = store.create(title, html, presentation_id=presentation_id)
+        p = store.create(title, html, presentation_id=presentation_id, tags=_with_ns(None, ns))
         return _ok(req_id, f"Review displayed: {p.id} ({len(files)} file{'s' if len(files) > 1 else ''}, {total_comments} comments)")
 
     if name == "share_presentation":

@@ -3,7 +3,7 @@ repo: architecture
 path: docs/architecture/aw-app-presentations.md
 source: generated
 edited: false
-checksum: sha256:afc62e49d8519aaf61219a32689f305a7e3ac1e2b9a3c77591f7924e1fb2d276
+checksum: sha256:a610cf875b47fea9d0686f155432f32299308ffd1c77612ad572f93229c20239
 ---
 # Presentations
 
@@ -22,6 +22,7 @@ HTML presentations created by agents (reports, diagrams, code reviews, images) â
 ## MCP tools
 - `commented_file`
 - `create_presentation`
+- `create_presentation_from_file`
 - `delete_presentation`
 - `export_presentation_to_image`
 - `list_presentations`

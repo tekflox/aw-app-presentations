@@ -447,3 +447,99 @@ def test_register_self_noops_when_package_dir_missing(tmp_path):
     missing = tmp_path / "does-not-exist"
     self_register.register_self(str(missing), 9030)
     assert not missing.exists()  # no crash, nothing created
+
+
+# ---- Per-profile namespace (gateway-injected _gateway_presentation_namespace)
+
+
+NS = {"_gateway_presentation_namespace": "crispal"}
+
+
+def _text(resp):
+    return resp.json()["result"]["content"][0]["text"]
+
+
+def _is_error(resp):
+    return resp.json()["result"]["isError"]
+
+
+def test_scoped_create_tags_the_presentation_with_its_namespace(client, store):
+    _call(client, "create_presentation", {"id": "p1", "title": "T", "html": "<p>x</p>", **NS})
+    assert "namespace:crispal" in store.get("p1").tags
+
+
+def test_clearing_tags_cannot_launder_a_presentation_out_of_its_namespace(client, store):
+    _call(client, "create_presentation", {"id": "p1", "title": "T", "html": "<p>x</p>",
+                                          "tags": ["a"], **NS})
+    _call(client, "update_presentation", {"id": "p1", "tags": [], **NS})
+    assert store.get("p1").tags == ["namespace:crispal"]
+
+
+def test_omitting_tags_on_update_leaves_the_namespace_tag_alone(client, store):
+    _call(client, "create_presentation", {"id": "p1", "title": "T", "html": "<p>x</p>", **NS})
+    _call(client, "update_presentation", {"id": "p1", "title": "T2", **NS})
+    assert store.get("p1").tags == ["namespace:crispal"]
+    assert store.get("p1").title == "T2"
+
+
+def test_list_is_restricted_to_the_namespace(client, store):
+    _call(client, "create_presentation", {"id": "mine", "title": "Mine", "html": "<p>1</p>", **NS})
+    _call(client, "create_presentation", {"id": "theirs", "title": "Theirs", "html": "<p>2</p>"})
+
+    scoped = _text(_call(client, "list_presentations", dict(NS)))
+    assert "mine" in scoped and "theirs" not in scoped
+    # ...and an unscoped caller still sees everything.
+    unscoped = _text(_call(client, "list_presentations", {}))
+    assert "mine" in unscoped and "theirs" in unscoped
+
+
+@pytest.mark.parametrize("tool,arg", [
+    ("update_presentation", "id"),
+    ("delete_presentation", "id"),
+    ("share_presentation", "presentation_id"),
+    ("export_presentation_to_image", "presentation_id"),
+])
+def test_a_presentation_outside_the_namespace_is_untouchable(client, store, tool, arg):
+    _call(client, "create_presentation", {"id": "theirs", "title": "T", "html": "<p>x</p>"})
+
+    resp = _call(client, tool, {arg: "theirs", **NS})
+
+    assert _is_error(resp)
+    assert "not in your namespace" in _text(resp)
+    assert store.get("theirs") is not None       # delete really didn't happen
+    assert store.get("theirs").title == "T"      # nor did update
+
+
+def test_the_derived_id_is_gated_too_not_just_an_explicit_one(client, store, tmp_path):
+    # show_image invents `img-<filename>`; checking only args["id"] would wave
+    # through exactly the collision that actually happens.
+    _call(client, "create_presentation", {"id": "img-shot-png", "title": "Theirs",
+                                          "html": "<p>x</p>"})
+    img = tmp_path / "shot.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    resp = _call(client, "show_image", {"path": str(img), **NS})
+
+    assert _is_error(resp) and "not in your namespace" in _text(resp)
+    assert store.get("img-shot-png").title == "Theirs"
+
+
+def test_create_from_file_also_lands_inside_the_namespace(client, store, tmp_path):
+    doc = tmp_path / "doc.html"
+    doc.write_text("<p>hi</p>")
+    import presentations_app.mcp.http_handler as hh
+    orig = hh._resolve_in_workspace
+    hh._resolve_in_workspace = lambda p: p
+    try:
+        _call(client, "create_presentation_from_file",
+              {"path": str(doc), "id": "ff", **NS})
+    finally:
+        hh._resolve_in_workspace = orig
+    assert "namespace:crispal" in store.get("ff").tags
+
+
+def test_an_unscoped_caller_is_unaffected(client, store):
+    _call(client, "create_presentation", {"id": "p1", "title": "T", "html": "<p>x</p>",
+                                          "tags": ["a"]})
+    assert store.get("p1").tags == ["a"]
+    assert not _is_error(_call(client, "update_presentation", {"id": "p1", "title": "T2"}))
