@@ -38,7 +38,7 @@ function Ae(e) {
   const t = K(e, "border-top-width"), n = K(e, "border-bottom-width");
   return e.clientHeight + t + n;
 }
-function be(e, t = {}) {
+function we(e, t = {}) {
   const n = t.width || Oe(e), r = t.height || Ae(e);
   return { width: n, height: r };
 }
@@ -138,7 +138,7 @@ function te(e) {
 function Ie(e, t) {
   return `data:${t};base64,${e}`;
 }
-async function we(e, t, n) {
+async function be(e, t, n) {
   const r = await fetch(e, t);
   if (r.status === 404)
     throw new Error(`Resource "${r.url}" not found`);
@@ -166,7 +166,7 @@ async function ne(e, t, n) {
   n.cacheBust && (e += (/\?/.test(e) ? "&" : "?") + (/* @__PURE__ */ new Date()).getTime());
   let a;
   try {
-    const o = await we(e, n.fetchRequestInit, ({ res: i, result: l }) => (t || (t = i.headers.get("Content-Type") || ""), Be(l)));
+    const o = await be(e, n.fetchRequestInit, ({ res: i, result: l }) => (t || (t = i.headers.get("Content-Type") || ""), Be(l)));
     a = Ie(o, t);
   } catch (o) {
     a = n.imagePlaceholder || "";
@@ -354,7 +354,7 @@ async function ge(e, t) {
   let n = e.cssText;
   const r = /url\(["']?([^"')]+)["']?\)/g, o = (n.match(/url\([^)]+\)/g) || []).map(async (i) => {
     let l = i.replace(r, "$1");
-    return l.startsWith("https://") || (l = new URL(l, e.url).href), we(l, t.fetchRequestInit, ({ result: f }) => (n = n.replace(i, `url(${f})`), [i, f]));
+    return l.startsWith("https://") || (l = new URL(l, e.url).href), be(l, t.fetchRequestInit, ({ result: f }) => (n = n.replace(i, `url(${f})`), [i, f]));
   });
   return Promise.all(o).then(() => n);
 }
@@ -464,43 +464,43 @@ async function yt(e, t) {
     r.appendChild(a), e.firstChild ? e.insertBefore(r, e.firstChild) : e.appendChild(r);
   }
 }
-async function bt(e, t = {}) {
-  const { width: n, height: r } = be(e, t), a = await Y(e, t, !0);
+async function wt(e, t = {}) {
+  const { width: n, height: r } = we(e, t), a = await Y(e, t, !0);
   return await yt(a, t), await Re(a, t), ft(a, t), await Ue(a, n, r);
 }
-async function wt(e, t = {}) {
-  const { width: n, height: r } = be(e, t), a = await bt(e, t), o = await Q(a), i = document.createElement("canvas"), l = i.getContext("2d"), f = t.pixelRatio || Fe(), A = t.canvasWidth || n, W = t.canvasHeight || r;
+async function bt(e, t = {}) {
+  const { width: n, height: r } = we(e, t), a = await wt(e, t), o = await Q(a), i = document.createElement("canvas"), l = i.getContext("2d"), f = t.pixelRatio || Fe(), A = t.canvasWidth || n, W = t.canvasHeight || r;
   return i.width = A * f, i.height = W * f, t.skipAutoScale || De(i), i.style.width = `${A}`, i.style.height = `${W}`, t.backgroundColor && (l.fillStyle = t.backgroundColor, l.fillRect(0, 0, i.width, i.height)), l.drawImage(o, 0, 0, i.width, i.height), i;
 }
 async function vt(e, t = {}) {
-  return (await wt(e, t)).toDataURL();
+  return (await bt(e, t)).toDataURL();
 }
 function Et(e) {
   var ae;
   const { useState: t, useRef: n, useCallback: r, useEffect: a } = e.React, o = 1280, i = 832;
   function l() {
-    const [c, E] = t([]), [b, S] = t(!1), p = n(null), h = r((s, x) => {
-      var k;
-      (k = window.__awOpenAppWindow) == null || k.call(window, "presentations.viewer", s, x);
+    const [c, S] = t([]), [w, k] = t(!1), p = n(null), h = r((s, x) => {
+      var R;
+      (R = window.__awOpenAppWindow) == null || R.call(window, "presentations.viewer", s, x);
     }, []);
     a(() => (window.__awOpenPresentation = (s) => {
-      const x = c.find((k) => k.id === s);
+      const x = c.find((R) => R.id === s);
       h(s, x == null ? void 0 : x.title);
     }, () => {
       delete window.__awOpenPresentation;
     }), [c, h]), a(() => {
-      let s, x, k = !1;
+      let s, x, R = !1;
       const P = () => {
         try {
-          s = new WebSocket(e.app.wsUrl("/ws")), s.onmessage = (R) => {
+          s = new WebSocket(e.app.wsUrl("/ws")), s.onmessage = (b) => {
             let m;
             try {
-              m = JSON.parse(R.data);
+              m = JSON.parse(b.data);
             } catch {
               return;
             }
             if (m.type === "presentation_init") {
-              E(m.presentations || []);
+              S(m.presentations || []);
               return;
             }
             if (m.type === "presentation_update") {
@@ -508,10 +508,17 @@ function Et(e) {
                 window.dispatchEvent(new CustomEvent("aw-presentation-update", { detail: m }));
               } catch {
               }
-              m.action === "create" ? (E((T) => [...T.filter((g) => g.id !== m.presentation.id), m.presentation]), m.presentation.visible !== !1 && !m.silent && h(m.presentation.id, m.presentation.title)) : m.action === "update" ? E((T) => T.map((g) => g.id === m.presentation.id ? m.presentation : g)) : m.action === "delete" && E((T) => T.filter((g) => g.id !== m.id));
+              m.action === "create" ? (S((T) => [...T.filter((g) => g.id !== m.presentation.id), m.presentation]), m.presentation.visible !== !1 && !m.silent && h(m.presentation.id, m.presentation.title)) : m.action === "update" ? S((T) => T.map((g) => g.id === m.presentation.id ? m.presentation : g)) : m.action === "delete" && S((T) => T.filter((g) => g.id !== m.id));
             }
-          }, s.onclose = () => {
-            k || (x = setTimeout(P, 5e3));
+          }, s.onclose = (b) => {
+            if (b.code === 4401 || b.code === 4403 || b.code === 4426) {
+              try {
+                window.dispatchEvent(new Event("aw-auth-failed"));
+              } catch {
+              }
+              return;
+            }
+            R || (x = setTimeout(P, 5e3));
           }, s.onerror = () => {
             try {
               s.close();
@@ -519,11 +526,11 @@ function Et(e) {
             }
           };
         } catch {
-          k || (x = setTimeout(P, 5e3));
+          R || (x = setTimeout(P, 5e3));
         }
       };
       return P(), () => {
-        if (k = !0, clearTimeout(x), s) {
+        if (R = !0, clearTimeout(x), s) {
           s.onclose = null;
           try {
             s.close();
@@ -533,41 +540,41 @@ function Et(e) {
       };
     }, [h]);
     const F = r(() => {
-      clearTimeout(p.current), S(!0);
+      clearTimeout(p.current), k(!0);
     }, []), C = r(() => {
-      clearTimeout(p.current), p.current = setTimeout(() => S(!1), 150);
+      clearTimeout(p.current), p.current = setTimeout(() => k(!1), 150);
     }, []);
     a(() => () => clearTimeout(p.current), []);
     const $ = r(async (s) => {
       await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${s}`), { method: "DELETE" });
-    }, []), w = [...c].sort((s, x) => (x.created_at || 0) - (s.created_at || 0));
+    }, []), v = [...c].sort((s, x) => (x.created_at || 0) - (s.created_at || 0));
     return /* @__PURE__ */ e.h("div", { className: "relative", onMouseEnter: F, onMouseLeave: C }, /* @__PURE__ */ e.h(
       "button",
       {
-        onClick: () => S((s) => !s),
+        onClick: () => k((s) => !s),
         className: "px-3 py-1 text-xs rounded transition-colors cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-white/5"
       },
       "Presentation",
-      w.length > 0 && /* @__PURE__ */ e.h("span", { className: "ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full text-[9px] font-bold px-1 bg-[var(--color-accent)]/20 text-[var(--color-accent)]" }, w.length)
-    ), b && /* @__PURE__ */ e.h(
+      v.length > 0 && /* @__PURE__ */ e.h("span", { className: "ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full text-[9px] font-bold px-1 bg-[var(--color-accent)]/20 text-[var(--color-accent)]" }, v.length)
+    ), w && /* @__PURE__ */ e.h(
       "div",
       {
         className: "absolute left-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3",
         style: { minWidth: 320, maxWidth: 720 }
       },
-      w.length === 0 ? /* @__PURE__ */ e.h("div", { className: "px-4 py-6 text-center text-xs text-[var(--color-text-muted)] italic" }, "No presentations yet. Use ", /* @__PURE__ */ e.h("code", { className: "bg-white/10 px-1 rounded" }, "/aw-presentation"), " to create one.") : /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("div", { className: "text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1" }, "Presentations · newest first"), /* @__PURE__ */ e.h(
+      v.length === 0 ? /* @__PURE__ */ e.h("div", { className: "px-4 py-6 text-center text-xs text-[var(--color-text-muted)] italic" }, "No presentations yet. Use ", /* @__PURE__ */ e.h("code", { className: "bg-white/10 px-1 rounded" }, "/aw-presentation"), " to create one.") : /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("div", { className: "text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1" }, "Presentations · newest first"), /* @__PURE__ */ e.h(
         "div",
         {
           className: "grid gap-2 overflow-y-auto",
           style: { gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", maxHeight: "70vh" }
         },
-        w.map((s) => /* @__PURE__ */ e.h(
+        v.map((s) => /* @__PURE__ */ e.h(
           f,
           {
             key: s.id,
             presentation: s,
             onClick: () => {
-              S(!1), h(s.id, s.title);
+              k(!1), h(s.id, s.title);
             },
             onDelete: () => $(s.id)
           }
@@ -575,31 +582,31 @@ function Et(e) {
       ))
     ));
   }
-  function f({ presentation: c, onClick: E, onDelete: b }) {
-    const S = n(null), [p, h] = t(0.16), F = o, C = i, $ = C / F;
+  function f({ presentation: c, onClick: S, onDelete: w }) {
+    const k = n(null), [p, h] = t(0.16), F = o, C = i, $ = C / F;
     a(() => {
-      const s = S.current;
+      const s = k.current;
       if (!s || typeof ResizeObserver > "u") return;
-      const x = new ResizeObserver((k) => {
-        for (const P of k) {
-          const R = P.contentRect.width;
-          R > 0 && h(R / F);
+      const x = new ResizeObserver((R) => {
+        for (const P of R) {
+          const b = P.contentRect.width;
+          b > 0 && h(b / F);
         }
       });
       return x.observe(s), () => x.disconnect();
     }, []);
-    const w = c.created_at ? new Date(c.created_at * 1e3).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    const v = c.created_at ? new Date(c.created_at * 1e3).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
     return /* @__PURE__ */ e.h(
       "div",
       {
-        onClick: E,
+        onClick: S,
         className: "group relative rounded-md border border-[var(--color-border)] bg-[var(--color-bg-primary)] overflow-hidden cursor-pointer hover:border-[var(--color-accent)] transition-colors",
         title: c.title
       },
       /* @__PURE__ */ e.h(
         "div",
         {
-          ref: S,
+          ref: k,
           className: "relative bg-[var(--color-bg-primary)]",
           style: { width: "100%", paddingTop: `${$ * 100}%`, overflow: "hidden" }
         },
@@ -640,12 +647,12 @@ function Et(e) {
         },
         "+",
         c.tags.length - 4
-      )), w && /* @__PURE__ */ e.h("div", { className: "text-[9px] text-[var(--color-text-muted)] truncate mt-0.5" }, w)),
+      )), v && /* @__PURE__ */ e.h("div", { className: "text-[9px] text-[var(--color-text-muted)] truncate mt-0.5" }, v)),
       /* @__PURE__ */ e.h(
         "button",
         {
           onClick: (s) => {
-            s.stopPropagation(), b();
+            s.stopPropagation(), w();
           },
           className: "hidden group-hover:flex absolute top-1 right-1 items-center justify-center w-5 h-5 rounded bg-black/60 text-white/80 hover:text-[var(--color-danger)] hover:bg-black/80",
           title: "Delete presentation"
@@ -655,8 +662,8 @@ function Et(e) {
     );
   }
   const A = /* @__PURE__ */ new Map(), W = 640;
-  function I(c, E, { onClose: b, onTitleChange: S } = {}) {
-    const [p, h] = t(null), [F, C] = t(!1), [$, w] = t(null), [s, x] = t(!1), [k, P] = t(!1), [R, m] = t(null), T = r(async () => {
+  function I(c, S, { onClose: w, onTitleChange: k } = {}) {
+    const [p, h] = t(null), [F, C] = t(!1), [$, v] = t(null), [s, x] = t(!1), [R, P] = t(!1), [b, m] = t(null), T = r(async () => {
       if (c)
         try {
           const d = await (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`))).json();
@@ -671,10 +678,10 @@ function Et(e) {
       const y = (d) => {
         var U;
         const u = d.detail;
-        !u || u.type !== "presentation_update" || (u.action === "delete" && u.id === c ? b == null || b() : (u.action === "update" || u.action === "create") && ((U = u.presentation) == null ? void 0 : U.id) === c && h(u.presentation));
+        !u || u.type !== "presentation_update" || (u.action === "delete" && u.id === c ? w == null || w() : (u.action === "update" || u.action === "create") && ((U = u.presentation) == null ? void 0 : U.id) === c && h(u.presentation));
       };
       return window.addEventListener("aw-presentation-update", y), () => window.removeEventListener("aw-presentation-update", y);
-    }, [c, b]);
+    }, [c, w]);
     const g = c ? e.app.absoluteApiUrl(`/presentations/${c}/html`) : null, H = r((y) => {
       const d = document.createElement("a");
       d.download = `${((p == null ? void 0 : p.title) || "presentation").replace(/[^a-zA-Z0-9_-]/g, "_")}.png`, d.href = y, d.click();
@@ -682,7 +689,7 @@ function Et(e) {
       var y;
       m(null), P(!0);
       try {
-        const d = (y = A.get(E)) == null ? void 0 : y.contentDocument;
+        const d = (y = A.get(S)) == null ? void 0 : y.contentDocument;
         if (d && d.body) {
           const u = await vt(d.documentElement, {
             backgroundColor: "#111318",
@@ -711,30 +718,30 @@ function Et(e) {
       } finally {
         P(!1);
       }
-    }, [c, H, E]), v = r((y) => {
+    }, [c, H, S]), E = r((y) => {
       var d;
-      if (S) {
-        S(y);
+      if (k) {
+        k(y);
         return;
       }
       (d = window.__awOpenAppWindow) == null || d.call(window, "presentations.viewer", c, y);
-    }, [S, c]), N = r(async (y) => {
+    }, [k, c]), N = r(async (y) => {
       const d = (y || "").trim();
       !d || d === (p == null ? void 0 : p.title) || (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: d })
-      }), h((u) => u && { ...u, title: d }), v(d));
-    }, [p == null ? void 0 : p.title, c, v]), D = r(async (y) => {
+      }), h((u) => u && { ...u, title: d }), E(d));
+    }, [p == null ? void 0 : p.title, c, E]), D = r(async (y) => {
       if (c) {
-        C(!0), w(null);
+        C(!0), v(null);
         try {
           const u = await (await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}/share`), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ expires_in: y })
           })).json();
-          u.success && u.token && w(`${g}?token=${u.token}`);
+          u.success && u.token && v(`${g}?token=${u.token}`);
         } catch (d) {
           console.error("Share failed:", d);
         } finally {
@@ -748,8 +755,8 @@ function Et(e) {
       }).catch(() => {
       }));
     }, [$]), X = r(async () => {
-      await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`), { method: "DELETE" }), b == null || b();
-    }, [c, b]), G = r(({ asTab: y = !1 } = {}) => {
+      await e.sdk.api.fetch(e.app.apiUrl(`/presentations/${c}`), { method: "DELETE" }), w == null || w();
+    }, [c, w]), G = r(({ asTab: y = !1 } = {}) => {
       if (g) {
         if (y) {
           window.open(g, "_blank");
@@ -762,13 +769,13 @@ function Et(e) {
       presentation: p,
       htmlUrl: g,
       shareLink: $,
-      setShareLink: w,
+      setShareLink: v,
       shareLoading: F,
       shareCopied: s,
       handleCreateShare: D,
       handleCopy: M,
-      exportLoading: k,
-      exportError: R,
+      exportLoading: R,
+      exportError: b,
       setExportError: m,
       handleExport: j,
       commitRename: N,
@@ -776,27 +783,27 @@ function Et(e) {
       popOut: G
     };
   }
-  function Z({ windowKey: c, instanceId: E, onClose: b, onTitleChange: S }) {
-    const p = E, {
+  function Z({ windowKey: c, instanceId: S, onClose: w, onTitleChange: k }) {
+    const p = S, {
       presentation: h,
       htmlUrl: F,
       shareLink: C,
       setShareLink: $,
-      shareLoading: w,
+      shareLoading: v,
       shareCopied: s,
       handleCreateShare: x,
-      handleCopy: k,
+      handleCopy: R,
       exportLoading: P,
-      exportError: R,
+      exportError: b,
       setExportError: m,
       handleExport: T,
       commitRename: g,
       handleDelete: H,
       popOut: j
-    } = I(p, c, { onClose: b, onTitleChange: S }), [v, N] = t(!1), [D, M] = t(""), [X, G] = t(!1);
+    } = I(p, c, { onClose: w, onTitleChange: k }), [E, N] = t(!1), [D, M] = t(""), [X, G] = t(!1);
     a(() => {
-      v || M((h == null ? void 0 : h.title) || "");
-    }, [h == null ? void 0 : h.title, v]);
+      E || M((h == null ? void 0 : h.title) || "");
+    }, [h == null ? void 0 : h.title, E]);
     const y = n(null), d = n(null), [u, U] = t(null), oe = r((L) => {
       var V;
       const z = (V = L.current) == null ? void 0 : V.getBoundingClientRect();
@@ -805,7 +812,7 @@ function Et(e) {
       N(!1), g(D);
     }, [g, D]);
     return a(() => {
-      if (!v && !X && !R) return;
+      if (!E && !X && !b) return;
       const L = (V) => {
         var le, ce, se, ue;
         (le = y.current) != null && le.contains(V.target) || (ce = d.current) != null && ce.contains(V.target) || (ue = (se = V.target).closest) != null && ue.call(se, "[data-pres-popover]") || (N(!1), G(!1), m(null));
@@ -815,7 +822,7 @@ function Et(e) {
       return document.addEventListener("mousedown", L), document.addEventListener("keydown", z), () => {
         document.removeEventListener("mousedown", L), document.removeEventListener("keydown", z);
       };
-    }, [v, X, R, m]), /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h(
+    }, [E, X, b, m]), /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h(
       "button",
       {
         ref: y,
@@ -850,8 +857,8 @@ function Et(e) {
       {
         onClick: T,
         disabled: P,
-        className: `p-1 rounded ${P ? "opacity-50 cursor-wait" : "hover:bg-white/10 cursor-pointer"} ${R ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]"}`,
-        title: R ? `Export failed: ${R}` : "Export as PNG"
+        className: `p-1 rounded ${P ? "opacity-50 cursor-wait" : "hover:bg-white/10 cursor-pointer"} ${b ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]"}`,
+        title: b ? `Export failed: ${b}` : "Export as PNG"
       },
       /* @__PURE__ */ e.h("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2" }, /* @__PURE__ */ e.h("path", { d: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" }), /* @__PURE__ */ e.h("polyline", { points: "7 10 12 15 17 10" }), /* @__PURE__ */ e.h("line", { x1: "12", y1: "15", x2: "12", y2: "3" }))
     ), /* @__PURE__ */ e.h(
@@ -862,7 +869,7 @@ function Et(e) {
         title: "Delete presentation"
       },
       /* @__PURE__ */ e.h("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "currentColor" }, /* @__PURE__ */ e.h("path", { d: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" }), /* @__PURE__ */ e.h("path", { fillRule: "evenodd", d: "M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1h3a1 1 0 0 1 1 1z" }))
-    ), v && u && e.ReactDOM.createPortal(
+    ), E && u && e.ReactDOM.createPortal(
       /* @__PURE__ */ e.h(
         "div",
         {
@@ -903,7 +910,7 @@ function Et(e) {
           style: { top: u.top, right: u.right, minWidth: 260 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] mb-2" }, "Share presentation"),
-        w ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : C ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: C }, C), /* @__PURE__ */ e.h("button", { onClick: k, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, s ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => $(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: L, value: z }) => /* @__PURE__ */ e.h(
+        v ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : C ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: C }, C), /* @__PURE__ */ e.h("button", { onClick: R, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, s ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => $(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: L, value: z }) => /* @__PURE__ */ e.h(
           "button",
           {
             key: L,
@@ -914,7 +921,7 @@ function Et(e) {
         )))
       ),
       document.body
-    ), R && u && e.ReactDOM.createPortal(
+    ), b && u && e.ReactDOM.createPortal(
       // The `title` attribute never surfaces on touch devices (iOS Safari
       // shows no hover tooltip on tap), so a red icon with no visible
       // reason reads as "broken, does nothing" — this makes it tappable.
@@ -926,7 +933,7 @@ function Et(e) {
           style: { top: u.top, right: u.right, minWidth: 220, maxWidth: 280 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-danger)] mb-1" }, "Export failed"),
-        /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-2" }, R),
+        /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-2" }, b),
         /* @__PURE__ */ e.h(
           "button",
           {
@@ -939,23 +946,23 @@ function Et(e) {
       document.body
     ));
   }
-  function Pe({ actions: c, onDismiss: E }) {
+  function Pe({ actions: c, onDismiss: S }) {
     const {
-      presentation: b,
-      shareLink: S,
+      presentation: w,
+      shareLink: k,
       setShareLink: p,
       shareLoading: h,
       shareCopied: F,
       handleCreateShare: C,
       handleCopy: $,
-      exportLoading: w,
+      exportLoading: v,
       exportError: s,
       setExportError: x,
-      handleExport: k,
+      handleExport: R,
       commitRename: P,
-      handleDelete: R,
+      handleDelete: b,
       popOut: m
-    } = c, [T, g] = t("menu"), [H, j] = t((b == null ? void 0 : b.title) || ""), v = {
+    } = c, [T, g] = t("menu"), [H, j] = t((w == null ? void 0 : w.title) || ""), E = {
       display: "flex",
       alignItems: "center",
       gap: 12,
@@ -986,29 +993,29 @@ function Et(e) {
     return /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h(
       "div",
       {
-        onClick: E,
+        onClick: S,
         style: { position: "absolute", inset: 0, zIndex: 19, background: "rgba(0,0,0,0.45)" }
       }
-    ), /* @__PURE__ */ e.h("div", { style: N, role: "menu" }, T === "menu" && /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("button", { style: v, onClick: () => {
+    ), /* @__PURE__ */ e.h("div", { style: N, role: "menu" }, T === "menu" && /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("button", { style: E, onClick: () => {
       p(null), g("share");
     } }, "Share"), /* @__PURE__ */ e.h(
       "button",
       {
-        style: { ...v, opacity: w ? 0.5 : 1 },
-        disabled: w,
-        onClick: k
+        style: { ...E, opacity: v ? 0.5 : 1 },
+        disabled: v,
+        onClick: R
       },
-      w ? "Exporting…" : "Export as PNG"
-    ), /* @__PURE__ */ e.h("button", { style: v, onClick: () => {
-      j((b == null ? void 0 : b.title) || ""), g("rename");
-    } }, "Rename"), /* @__PURE__ */ e.h("button", { style: v, onClick: () => {
-      m({ asTab: !0 }), E();
+      v ? "Exporting…" : "Export as PNG"
+    ), /* @__PURE__ */ e.h("button", { style: E, onClick: () => {
+      j((w == null ? void 0 : w.title) || ""), g("rename");
+    } }, "Rename"), /* @__PURE__ */ e.h("button", { style: E, onClick: () => {
+      m({ asTab: !0 }), S();
     } }, "Open in new tab"), /* @__PURE__ */ e.h(
       "button",
       {
-        style: { ...v, color: "var(--color-danger)" },
+        style: { ...E, color: "var(--color-danger)" },
         onClick: () => {
-          R(), E();
+          b(), S();
         }
       },
       "Delete"
@@ -1016,10 +1023,10 @@ function Et(e) {
       "button",
       {
         onClick: () => x(null),
-        style: { ...v, minHeight: 36, padding: 0, marginTop: 4, fontSize: 12, color: "var(--color-text-muted)" }
+        style: { ...E, minHeight: 36, padding: 0, marginTop: 4, fontSize: 12, color: "var(--color-text-muted)" }
       },
       "Dismiss"
-    ))), T === "share" && /* @__PURE__ */ e.h("div", { style: { padding: "8px 16px 4px" } }, /* @__PURE__ */ e.h("div", { style: { fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 } }, S ? "Link generated:" : "Link expires after:"), h ? /* @__PURE__ */ e.h("div", { style: { fontSize: 13, color: "var(--color-text-muted)", padding: "12px 0" } }, "Generating link…") : S ? /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("div", { style: {
+    ))), T === "share" && /* @__PURE__ */ e.h("div", { style: { padding: "8px 16px 4px" } }, /* @__PURE__ */ e.h("div", { style: { fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 } }, k ? "Link generated:" : "Link expires after:"), h ? /* @__PURE__ */ e.h("div", { style: { fontSize: 13, color: "var(--color-text-muted)", padding: "12px 0" } }, "Generating link…") : k ? /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h("div", { style: {
       fontSize: 11,
       fontFamily: "monospace",
       wordBreak: "break-all",
@@ -1028,14 +1035,14 @@ function Et(e) {
       borderRadius: 6,
       padding: 8,
       color: "var(--color-text-primary)"
-    } }, S), /* @__PURE__ */ e.h("button", { style: { ...v, padding: 0, color: "var(--color-accent)" }, onClick: $ }, F ? "✓ Copied" : "Copy link")) : [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: D, value: M }) => /* @__PURE__ */ e.h("button", { key: D, style: { ...v, padding: 0 }, onClick: () => C(M) }, D)), /* @__PURE__ */ e.h("button", { style: { ...v, padding: 0, color: "var(--color-text-muted)" }, onClick: () => g("menu") }, "← Back")), T === "rename" && /* @__PURE__ */ e.h("div", { style: { padding: "8px 16px 4px" } }, /* @__PURE__ */ e.h("div", { style: { fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 } }, "Rename presentation"), /* @__PURE__ */ e.h(
+    } }, k), /* @__PURE__ */ e.h("button", { style: { ...E, padding: 0, color: "var(--color-accent)" }, onClick: $ }, F ? "✓ Copied" : "Copy link")) : [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: D, value: M }) => /* @__PURE__ */ e.h("button", { key: D, style: { ...E, padding: 0 }, onClick: () => C(M) }, D)), /* @__PURE__ */ e.h("button", { style: { ...E, padding: 0, color: "var(--color-text-muted)" }, onClick: () => g("menu") }, "← Back")), T === "rename" && /* @__PURE__ */ e.h("div", { style: { padding: "8px 16px 4px" } }, /* @__PURE__ */ e.h("div", { style: { fontSize: 12, color: "var(--color-text-muted)", marginBottom: 8 } }, "Rename presentation"), /* @__PURE__ */ e.h(
       "input",
       {
         autoFocus: !0,
         value: H,
         onChange: (D) => j(D.target.value),
         onKeyDown: (D) => {
-          D.key === "Enter" && (P(H), E());
+          D.key === "Enter" && (P(H), S());
         },
         style: {
           // 16px, not smaller: iOS Safari zooms the whole page in on
@@ -1051,33 +1058,33 @@ function Et(e) {
           outline: "none"
         }
       }
-    ), /* @__PURE__ */ e.h("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ e.h("button", { style: { ...v, color: "var(--color-text-muted)" }, onClick: () => g("menu") }, "Cancel"), /* @__PURE__ */ e.h(
+    ), /* @__PURE__ */ e.h("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ e.h("button", { style: { ...E, color: "var(--color-text-muted)" }, onClick: () => g("menu") }, "Cancel"), /* @__PURE__ */ e.h(
       "button",
       {
-        style: { ...v, color: "var(--color-accent)", justifyContent: "flex-end" },
+        style: { ...E, color: "var(--color-accent)", justifyContent: "flex-end" },
         disabled: !H.trim(),
         onClick: () => {
-          P(H), E();
+          P(H), S();
         }
       },
       "Rename"
     )))));
   }
-  function Te({ windowKey: c, instanceId: E, onClose: b, onTitleChange: S }) {
-    const p = E, h = n(null), F = n(null), [C, $] = t(!1), [w, s] = t(!1), x = I(p, c, { onClose: b, onTitleChange: S }), { htmlUrl: k } = x;
+  function Te({ windowKey: c, instanceId: S, onClose: w, onTitleChange: k }) {
+    const p = S, h = n(null), F = n(null), [C, $] = t(!1), [v, s] = t(!1), x = I(p, c, { onClose: w, onTitleChange: k }), { htmlUrl: R } = x;
     return a(() => {
       const P = F.current;
       if (!P || typeof ResizeObserver > "u") return;
-      const R = new ResizeObserver((m) => {
+      const b = new ResizeObserver((m) => {
         for (const T of m) {
           const g = T.contentRect.width;
           g > 0 && $(g < W);
         }
       });
-      return R.observe(P), () => R.disconnect();
+      return b.observe(P), () => b.disconnect();
     }, []), a(() => {
       C || s(!1);
-    }, [C]), a(() => (A.set(c, h.current), () => A.delete(c)), [c]), /* @__PURE__ */ e.h("div", { ref: F, className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex-1 relative" }, k && /* @__PURE__ */ e.h("iframe", { ref: h, src: k, className: "absolute inset-0 w-full h-full bg-white border-0", title: "Presentation" }), C && !w && /* @__PURE__ */ e.h(
+    }, [C]), a(() => (A.set(c, h.current), () => A.delete(c)), [c]), /* @__PURE__ */ e.h("div", { ref: F, className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex-1 relative" }, R && /* @__PURE__ */ e.h("iframe", { ref: h, src: R, className: "absolute inset-0 w-full h-full bg-white border-0", title: "Presentation" }), C && !v && /* @__PURE__ */ e.h(
       "button",
       {
         onClick: () => s(!0),
@@ -1101,7 +1108,7 @@ function Et(e) {
         }
       },
       /* @__PURE__ */ e.h("svg", { width: "20", height: "20", viewBox: "0 0 24 24", fill: "currentColor" }, /* @__PURE__ */ e.h("circle", { cx: "12", cy: "5", r: "2" }), /* @__PURE__ */ e.h("circle", { cx: "12", cy: "12", r: "2" }), /* @__PURE__ */ e.h("circle", { cx: "12", cy: "19", r: "2" }))
-    ), C && w && /* @__PURE__ */ e.h(Pe, { actions: x, onDismiss: () => s(!1) })));
+    ), C && v && /* @__PURE__ */ e.h(Pe, { actions: x, onDismiss: () => s(!1) })));
   }
   e.registerSlot("core.nav", l), e.registerWindow("presentations.viewer", Te), (ae = e.registerWindowActions) == null || ae.call(e, "presentations.viewer", Z);
 }
