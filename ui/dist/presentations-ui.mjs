@@ -1084,7 +1084,13 @@ function Et(e) {
       return b.observe(P), () => b.disconnect();
     }, []), a(() => {
       C || s(!1);
-    }, [C]), a(() => (A.set(c, h.current), () => A.delete(c)), [c]), /* @__PURE__ */ e.h("div", { ref: F, className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex-1 relative" }, R && /* @__PURE__ */ e.h("iframe", { ref: h, src: R, className: "absolute inset-0 w-full h-full bg-white border-0", title: "Presentation" }), C && !v && /* @__PURE__ */ e.h(
+    }, [C]), a(() => (A.set(c, h.current), () => A.delete(c)), [c]), /* @__PURE__ */ e.h("div", { ref: F, className: "flex flex-col bg-[var(--color-bg-secondary)] h-full" }, /* @__PURE__ */ e.h("div", { className: "flex-1 relative" }, R && // allow-scripts only, deliberately NOT allow-same-origin: presentation
+    // HTML is agent-generated and can be hostile/compromised. Without
+    // allow-same-origin the frame is an opaque origin — scripts run, but
+    // can't read this API host's cookies/localStorage or ride an
+    // authenticated same-origin request. A relative fetch inside a
+    // presentation would need to resolve via an absolute URL instead.
+    /* @__PURE__ */ e.h("iframe", { ref: h, src: R, sandbox: "allow-scripts", className: "absolute inset-0 w-full h-full bg-white border-0", title: "Presentation" }), C && !v && /* @__PURE__ */ e.h(
       "button",
       {
         onClick: () => s(!0),

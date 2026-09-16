@@ -890,7 +890,13 @@ export function register(host) {
       <div ref={containerRef} className="flex flex-col bg-[var(--color-bg-secondary)] h-full">
         <div className="flex-1 relative">
           {htmlUrl && (
-            <iframe ref={iframeRef} src={htmlUrl} className="absolute inset-0 w-full h-full bg-white border-0" title="Presentation" />
+            // allow-scripts only, deliberately NOT allow-same-origin: presentation
+            // HTML is agent-generated and can be hostile/compromised. Without
+            // allow-same-origin the frame is an opaque origin — scripts run, but
+            // can't read this API host's cookies/localStorage or ride an
+            // authenticated same-origin request. A relative fetch inside a
+            // presentation would need to resolve via an absolute URL instead.
+            <iframe ref={iframeRef} src={htmlUrl} sandbox="allow-scripts" className="absolute inset-0 w-full h-full bg-white border-0" title="Presentation" />
           )}
           {narrow && !sheetOpen && (
             <button
