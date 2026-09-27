@@ -80,8 +80,21 @@ export function register(host) {
     // client (aw-workspace-ui's src/hooks/useSharedSocket.js, §7/§9.1) — this
     // app can't import it directly (no aw-workspace-ui internals across the
     // bundle boundary), so it's reached through host.sdk.ws.createSharedSocket.
+    //
+    // host.sdk.ws only exists on an aw-workspace-ui SPA new enough to expose
+    // it — this app releases independently of the SPA it's installed
+    // against, and a stale-SPA + newer-app combination is real in this
+    // estate (the deploy webhook can report success while the served bundle
+    // stays stale). Calling it unconditionally would throw and take this
+    // nav slot down with it. Feature-detect and degrade to no-live-updates —
+    // the presentation list still loads via whatever REST path opens it.
     useEffect(() => {
-      const socket = host.sdk.ws.createSharedSocket({
+      const createSharedSocket = host.sdk.ws?.createSharedSocket;
+      if (!createSharedSocket) {
+        console.warn('[presentations] host.sdk.ws.createSharedSocket is unavailable (SPA too old for aw-ws/1 §9.1) — live updates disabled.');
+        return undefined;
+      }
+      const socket = createSharedSocket({
         url: () => host.app.wsUrl('/ws'),
         initType: 'presentation_init',
         onFrame: (msg) => {
