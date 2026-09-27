@@ -76,59 +76,50 @@ export function register(host) {
       return () => { delete window.__awOpenPresentation; };
     }, [presentations, openPresentation]);
 
+    // Reconnect/backoff/auth-close handling all live in the shared aw-ws/1
+    // client (aw-workspace-ui's src/hooks/useSharedSocket.js, §7/§9.1) — this
+    // app can't import it directly (no aw-workspace-ui internals across the
+    // bundle boundary), so it's reached through host.sdk.ws.createSharedSocket.
     useEffect(() => {
-      let ws, reconnectTimer, closed = false;
-      const connect = () => {
-        try {
-          ws = new WebSocket(host.app.wsUrl('/ws'));
-          ws.onmessage = (event) => {
-            let msg;
-            try { msg = JSON.parse(event.data); } catch { return; }
-            if (msg.type === 'presentation_init') {
-              setPresentations(msg.presentations || []);
-              return;
+      const socket = host.sdk.ws.createSharedSocket({
+        url: () => host.app.wsUrl('/ws'),
+        initType: 'presentation_init',
+        onFrame: (msg) => {
+          if (msg.type === 'presentation_init') {
+            setPresentations(msg.presentations || []);
+            return;
+          }
+          if (msg.type !== 'presentation_update') return;
+          // Broadcast for cross-app consumers (aw-app-whiteboard's /
+          // aw-app-tasks's own GeneratedAssets refresh) AND for this
+          // app's own open window bodies to self-refresh/self-close.
+          try { window.dispatchEvent(new CustomEvent('aw-presentation-update', { detail: msg })); } catch {}
+          if (msg.action === 'create') {
+            setPresentations((prev) => [...prev.filter((c) => c.id !== msg.presentation.id), msg.presentation]);
+            // Auto-open the new presentation unless visible=false
+            // (thumbnail-only) or silent=true (background-task hint —
+            // show in the gallery, don't yank the user's current view).
+            if (msg.presentation.visible !== false && !msg.silent) {
+              openPresentation(msg.presentation.id, msg.presentation.title);
             }
-            if (msg.type !== 'presentation_update') return;
-            // Broadcast for cross-app consumers (aw-app-whiteboard's /
-            // aw-app-tasks's own GeneratedAssets refresh) AND for this
-            // app's own open window bodies to self-refresh/self-close.
-            try { window.dispatchEvent(new CustomEvent('aw-presentation-update', { detail: msg })); } catch {}
-            if (msg.action === 'create') {
-              setPresentations((prev) => [...prev.filter((c) => c.id !== msg.presentation.id), msg.presentation]);
-              // Auto-open the new presentation unless visible=false
-              // (thumbnail-only) or silent=true (background-task hint —
-              // show in the gallery, don't yank the user's current view).
-              if (msg.presentation.visible !== false && !msg.silent) {
-                openPresentation(msg.presentation.id, msg.presentation.title);
-              }
-            } else if (msg.action === 'update') {
-              setPresentations((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
-            } else if (msg.action === 'delete') {
-              setPresentations((prev) => prev.filter((c) => c.id !== msg.id));
-            }
-          };
-          ws.onclose = (event) => {
-            // IdentityGuard closes 4401 (also 4403/4426) when the workspace
-            // session itself is invalid — auto-reconnecting into that wall
-            // hides a "logged out" state forever. Stop, and let the host
-            // app's aw-auth-failed listener put the user back at login.
-            if (event.code === 4401 || event.code === 4403 || event.code === 4426) {
-              try { window.dispatchEvent(new Event('aw-auth-failed')); } catch {}
-              return;
-            }
-            if (!closed) reconnectTimer = setTimeout(connect, 5000);
-          };
-          ws.onerror = () => { try { ws.close(); } catch {} };
-        } catch {
-          if (!closed) reconnectTimer = setTimeout(connect, 5000);
-        }
-      };
-      connect();
-      return () => {
-        closed = true;
-        clearTimeout(reconnectTimer);
-        if (ws) { ws.onclose = null; try { ws.close(); } catch {} }
-      };
+          } else if (msg.action === 'update') {
+            setPresentations((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
+          } else if (msg.action === 'delete') {
+            setPresentations((prev) => prev.filter((c) => c.id !== msg.id));
+          }
+        },
+        onStatus: ({ state }) => {
+          // IdentityGuard closes 4401 (also 4403/4426) when the workspace
+          // session itself is invalid — auto-reconnecting into that wall
+          // hides a "logged out" state forever. The shared client already
+          // stops reconnecting on these; this just puts the user back at
+          // login, same as the host app's own aw-auth-failed listener.
+          if (state === 'fatal') {
+            try { window.dispatchEvent(new Event('aw-auth-failed')); } catch {}
+          }
+        },
+      });
+      return socket.retain();
     }, [openPresentation]);
 
     const handleEnter = useCallback(() => { clearTimeout(closeTimer.current); setOpen(true); }, []);
