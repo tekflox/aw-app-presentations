@@ -68,6 +68,8 @@ class PresentationsAppPlugin:
         log.info("aw-app-presentations activated")
 
     async def deactivate(self) -> None:
+        if self.store._broadcaster is not None:
+            await self.store._broadcaster.stop()
         log.info("aw-app-presentations deactivated")
 
     async def _close_all_sockets(self) -> None:

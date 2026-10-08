@@ -22,6 +22,7 @@ logger = logging.getLogger("presentations_app.storage")
 
 _TABLE = "app__presentations__records"
 _SHARE_TABLE = "app__presentations__shares"
+_RELAY_TOPIC = "presentations:update"
 
 _TABLE_DDL = """
     id TEXT PRIMARY KEY,
@@ -113,11 +114,42 @@ class PresentationStore:
         self._ctx = ctx
         self._listeners: set = set()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._broadcaster = None
+        self._relay_up = False
         ctx.db.create(_TABLE, _TABLE_DDL)
         ctx.db.create(_SHARE_TABLE, _SHARE_TABLE_DDL)
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
+        asyncio.ensure_future(self._start_relay())
+
+    async def _start_relay(self) -> None:
+        """Start the cross-worker Redis relay. Never raises: at
+        ``AW_WORKSPACE_WORKERS=10`` (production) a browser's WS and a
+        recording daemon's HTTP upsert land on independently-chosen
+        workers, so without this relay ``_broadcast`` only ever reached
+        whichever worker happened to hold the open WS (~1/10 of the time).
+        With no reachable Redis — or no aw-workspace ``src`` package on
+        ``sys.path`` (this app also ships/tests standalone) — broadcasts
+        degrade to this worker's own listeners only, the same posture as
+        every other relay in this codebase (see
+        ``apps/devctl/devctl_app/relay.py``'s ``start_relay``)."""
+        try:
+            from src.libs.redis_coord import RedisBroadcaster
+
+            self._broadcaster = RedisBroadcaster()
+            await self._broadcaster.start_relay(self._on_relay_message)
+            self._relay_up = True
+        except Exception:
+            logger.warning(
+                "presentations: could not start the cross-worker Redis relay — "
+                "live updates will only reach this worker's own listeners until "
+                "restarted (harmless at AW_WORKSPACE_WORKERS=1)", exc_info=True)
+
+    async def _on_relay_message(self, topic: str, payload: dict) -> None:
+        if topic != _RELAY_TOPIC:
+            return
+        await self._send_all(json.dumps(payload))
 
     # ------------------------------------------------------------------
     # CRUD
@@ -262,10 +294,21 @@ class PresentationStore:
         self._listeners.discard(ws)
 
     def _broadcast(self, msg: dict):
-        if not self._listeners or not self._loop:
+        """Publish an event to every worker's listeners.
+
+        Must not early-return on "no LOCAL listeners" — the whole point of
+        the relay is reaching a listener owned by a DIFFERENT worker. The
+        "no loop" guard stays: without a loop there is nothing to schedule
+        either the publish or a local send onto.
+        """
+        if not self._loop:
             return
-        data = json.dumps(msg)
-        self._loop.call_soon_threadsafe(asyncio.ensure_future, self._send_all(data))
+        if self._relay_up:
+            self._loop.call_soon_threadsafe(
+                asyncio.ensure_future, self._broadcaster.publish(_RELAY_TOPIC, msg))
+        elif self._listeners:
+            data = json.dumps(msg)
+            self._loop.call_soon_threadsafe(asyncio.ensure_future, self._send_all(data))
 
     async def _send_all(self, data: str):
         dead = set()
