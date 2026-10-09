@@ -61,50 +61,6 @@ export function register(host) {
   // ------------------------------------------------------------------
   function PresentationsNavSlot() {
     const [presentations, setPresentations] = useState([]);
-    const [open, setOpen] = useState(false);
-    const closeTimer = useRef(null);
-
-    // Server-side search (title + visible body text) over GET /presentations?q=.
-    // `results` null means "no active search" — the grid falls back to the
-    // full WS-fed `sorted` list. `termRef` mirrors `term` for the WS frame
-    // handler below, which is set up once (see the socket effect's dep
-    // array) and would otherwise only ever see the term at mount time.
-    const [term, setTerm] = useState('');
-    const [results, setResults] = useState(null);
-    const termRef = useRef('');
-    const searchTimer = useRef(null);
-    const searchSeq = useRef(0);
-
-    const runSearch = useCallback((q) => {
-      clearTimeout(searchTimer.current);
-      const trimmed = q.trim();
-      if (!trimmed) {
-        setResults(null);
-        return;
-      }
-      searchTimer.current = setTimeout(async () => {
-        const seq = ++searchSeq.current;
-        try {
-          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations?q=' + encodeURIComponent(trimmed)));
-          const data = await r.json();
-          // Guard against a slower, now-stale response overwriting a
-          // faster, more recent one (fast typing must never flash wrong
-          // results) — only the latest-fired request may still apply.
-          if (seq === searchSeq.current) setResults(Array.isArray(data) ? data : []);
-        } catch {
-          if (seq === searchSeq.current) setResults([]);
-        }
-      }, 200);
-    }, []);
-
-    useEffect(() => () => clearTimeout(searchTimer.current), []);
-
-    const handleTermChange = useCallback((e) => {
-      const value = e.target.value;
-      termRef.current = value;
-      setTerm(value);
-      runSearch(value);
-    }, [runSearch]);
 
     const openPresentation = useCallback((id, title) => {
       window.__awOpenAppWindow?.('presentations.viewer', id, title);
@@ -157,18 +113,10 @@ export function register(host) {
             if (msg.presentation.visible !== false && !msg.silent) {
               openPresentation(msg.presentation.id, msg.presentation.title);
             }
-            // A term is active: membership can only be decided server-side
-            // (the client has no body text to judge against), so re-run
-            // the search rather than guess.
-            if (termRef.current.trim()) runSearch(termRef.current);
           } else if (msg.action === 'update') {
             setPresentations((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
-            if (termRef.current.trim()) runSearch(termRef.current);
           } else if (msg.action === 'delete') {
             setPresentations((prev) => prev.filter((c) => c.id !== msg.id));
-            // Instant local feedback; a re-fetch would also eventually
-            // drop it, but there's nothing to wait on here.
-            setResults((prev) => (prev ? prev.filter((c) => c.id !== msg.id) : prev));
           }
         },
         onStatus: ({ state }) => {
@@ -185,84 +133,19 @@ export function register(host) {
       return socket.retain();
     }, [openPresentation]);
 
-    const handleEnter = useCallback(() => { clearTimeout(closeTimer.current); setOpen(true); }, []);
-    const handleLeave = useCallback(() => {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = setTimeout(() => setOpen(false), 150);
-    }, []);
-    useEffect(() => () => clearTimeout(closeTimer.current), []);
-
-    const deletePresentation = useCallback(async (id) => {
-      await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${id}`), { method: 'DELETE' });
-    }, []);
-
-    const sorted = [...presentations].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-    // null `results` (no active search) falls back to the full WS-fed list;
-    // a non-empty term overlays the latest server-side search response.
-    const visible = results ?? sorted;
-
     return (
-      <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
+      <div className="relative">
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => window.__awOpenAppWindow?.('presentations.gallery', undefined, 'Presentations')}
           className="px-3 py-1 text-xs rounded transition-colors cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-white/5"
         >
           Presentation
-          {sorted.length > 0 && (
+          {presentations.length > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full text-[9px] font-bold px-1 bg-[var(--color-accent)]/20 text-[var(--color-accent)]">
-              {sorted.length}
+              {presentations.length}
             </span>
           )}
         </button>
-
-        {open && (
-          <div
-            className="absolute left-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
-            style={{ minWidth: 320, maxWidth: 720 }}
-          >
-            {/* Outside the empty/grid branch below on purpose: it must stay
-                mounted (and focused) even while a search drives the visible
-                list to zero results mid-word. */}
-            <input
-              type="text"
-              value={term}
-              onChange={handleTermChange}
-              placeholder="Search title or content…"
-              autoFocus
-              className="w-full mb-2 text-[11px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-            />
-            {visible.length === 0 ? (
-              results !== null ? (
-                <div className="px-4 py-6 text-center text-xs text-[var(--color-text-muted)]">
-                  No results for &ldquo;{term.trim()}&rdquo;
-                </div>
-              ) : (
-                <div className="px-4 py-6 text-center text-xs text-[var(--color-text-muted)] italic">
-                  No presentations yet. Use <code className="bg-white/10 px-1 rounded">/aw-presentation</code> to create one.
-                </div>
-              )
-            ) : (
-              <>
-                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
-                  Presentations · newest first
-                </div>
-                <div
-                  className="grid gap-2 overflow-y-auto"
-                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', maxHeight: '70vh' }}
-                >
-                  {visible.map((c) => (
-                    <PresentationThumbnail
-                      key={c.id}
-                      presentation={c}
-                      onClick={() => { setOpen(false); openPresentation(c.id, c.title); }}
-                      onDelete={() => deletePresentation(c.id)}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
       </div>
     );
   }
@@ -354,6 +237,177 @@ export function register(host) {
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </button>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // 1b. Gallery window body — a real AW window, replacing the old nav
+  // popover (2026-10-09 card). Owns its own presentation list (GET
+  // /presentations on mount) and the debounced server-side search this app
+  // already ships at GET /presentations?q= (search_text.py) — moved here
+  // verbatim from the old popover's runSearch, seq-guard included, rather
+  // than reimplemented client-side. Live updates ride the same
+  // 'aw-presentation-update' CustomEvent the nav slot already dispatches;
+  // this window has no standing socket of its own. No titlebar actions are
+  // registered for this window (see the host.registerWindow call below) —
+  // the search bar lives in the body, which is what keeps the mobile
+  // no-titlebar-slot constraint moot here.
+  function PresentationsGalleryBody() {
+    const [presentations, setPresentations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [term, setTerm] = useState('');
+    const [results, setResults] = useState(null);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const termRef = useRef('');
+    const searchTimer = useRef(null);
+    const searchSeq = useRef(0);
+    const containerRef = useRef(null);
+    const [narrow, setNarrow] = useState(false);
+
+    const openPresentation = useCallback((id, title) => {
+      window.__awOpenAppWindow?.('presentations.viewer', id, title);
+    }, []);
+
+    const deletePresentation = useCallback(async (id) => {
+      await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${id}`), { method: 'DELETE' });
+    }, []);
+
+    useEffect(() => {
+      (async () => {
+        try {
+          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations'));
+          const data = await r.json();
+          setPresentations(Array.isArray(data) ? data : []);
+        } catch {
+          setPresentations([]);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, []);
+
+    const runSearch = useCallback((q) => {
+      clearTimeout(searchTimer.current);
+      const trimmed = q.trim();
+      if (!trimmed) {
+        setResults(null);
+        setSearchLoading(false);
+        return;
+      }
+      setSearchLoading(true);
+      searchTimer.current = setTimeout(async () => {
+        const seq = ++searchSeq.current;
+        try {
+          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations?q=' + encodeURIComponent(trimmed)));
+          const data = await r.json();
+          // Same stale-response guard as the old popover: only the
+          // latest-fired request may still apply.
+          if (seq === searchSeq.current) { setResults(Array.isArray(data) ? data : []); setSearchLoading(false); }
+        } catch {
+          if (seq === searchSeq.current) { setResults([]); setSearchLoading(false); }
+        }
+      }, 200);
+    }, []);
+
+    useEffect(() => () => clearTimeout(searchTimer.current), []);
+
+    const handleTermChange = useCallback((e) => {
+      const value = e.target.value;
+      termRef.current = value;
+      setTerm(value);
+      runSearch(value);
+    }, [runSearch]);
+
+    useEffect(() => {
+      const handler = (e) => {
+        const msg = e.detail;
+        if (!msg || msg.type !== 'presentation_update') return;
+        if (msg.action === 'create') {
+          setPresentations((prev) => [...prev.filter((c) => c.id !== msg.presentation.id), msg.presentation]);
+          if (termRef.current.trim()) runSearch(termRef.current);
+        } else if (msg.action === 'update') {
+          setPresentations((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
+          if (termRef.current.trim()) runSearch(termRef.current);
+        } else if (msg.action === 'delete') {
+          setPresentations((prev) => prev.filter((c) => c.id !== msg.id));
+          setResults((prev) => (prev ? prev.filter((c) => c.id !== msg.id) : prev));
+        }
+      };
+      window.addEventListener('aw-presentation-update', handler);
+      return () => window.removeEventListener('aw-presentation-update', handler);
+    }, [runSearch]);
+
+    // Same ResizeObserver pattern as PresentationThumbnail/PresentationWindowBody.
+    // NARROW_WIDTH is defined further down in this file but already in scope
+    // by the time React calls this component (register() has fully run).
+    useEffect(() => {
+      const el = containerRef.current;
+      if (!el || typeof ResizeObserver === 'undefined') return undefined;
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const w = entry.contentRect.width;
+          if (w > 0) setNarrow(w < NARROW_WIDTH);
+        }
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, []);
+
+    const sorted = [...presentations].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    // null `results` (no active search) falls back to the full REST/WS-fed
+    // list; a non-empty term overlays the latest server-side search response.
+    const visible = results ?? sorted;
+
+    return (
+      <div ref={containerRef} className="flex flex-col h-full bg-[var(--color-bg-secondary)]">
+        <div className="p-3 border-b border-[var(--color-border)]">
+          <input
+            type="text"
+            value={term}
+            onChange={handleTermChange}
+            placeholder="Search title or content…"
+            autoFocus={!narrow}
+            className="w-full text-[12px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-2 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            style={narrow ? { fontSize: 16 } : undefined}
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          {loading ? (
+            <div className="px-4 py-10 text-center text-xs text-[var(--color-text-muted)]">Loading…</div>
+          ) : visible.length === 0 && !searchLoading ? (
+            results !== null ? (
+              <div className="px-4 py-10 text-center text-xs text-[var(--color-text-muted)]">
+                No results for &ldquo;{term.trim()}&rdquo;
+              </div>
+            ) : (
+              <div className="px-4 py-10 text-center text-xs text-[var(--color-text-muted)] italic">
+                No presentations yet. Use <code className="bg-white/10 px-1 rounded">/aw-presentation</code> to create one.
+              </div>
+            )
+          ) : (
+            <>
+              {searchLoading && (
+                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
+                  Searching…
+                </div>
+              )}
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}
+              >
+                {visible.map((c) => (
+                  <PresentationThumbnail
+                    key={c.id}
+                    presentation={c}
+                    onClick={() => openPresentation(c.id, c.title)}
+                    onDelete={() => deletePresentation(c.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     );
   }
@@ -1000,6 +1054,7 @@ export function register(host) {
   }
 
   host.registerSlot('core.nav', PresentationsNavSlot);
+  host.registerWindow('presentations.gallery', PresentationsGalleryBody);
   host.registerWindow('presentations.viewer', PresentationWindowBody);
   // Optional-chained: needs an aw-workspace-ui new enough to expose it (and to
   // render the core.window.titlebar:<id> slot at all). On an older host this

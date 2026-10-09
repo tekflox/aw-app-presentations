@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "presentations",
   "name": "Presentations",
-  "version": "0.38.0",
+  "version": "0.39.0",
   "description": "HTML presentations created by agents (reports, diagrams, code reviews, images) \u2014 top-bar gallery nav + a window that renders each presentation. Replaces the monolith's /ws/presentations feature and the aw-frontend static PresentationNav. Diff viewing lives in the separate aw-app-diff-tool.",
   "tier": "inprocess",
   "requires_ui_refresh": true,
@@ -33,6 +33,14 @@
     ],
     "windows": [
       {
+        "id": "presentations.gallery",
+        "title": "Presentations",
+        "icon": "layout",
+        "body": {
+          "type": "component"
+        }
+      },
+      {
         "id": "presentations.viewer",
         "title": "Presentation",
         "icon": "layout",
@@ -46,6 +54,7 @@
       "bundle": "ui/dist/presentations-ui.mjs",
       "slots": [
         "core.nav",
+        "core.window.body:presentations.gallery",
         "core.window.body:presentations.viewer"
       ]
     },
