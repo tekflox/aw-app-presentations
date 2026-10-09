@@ -304,30 +304,72 @@ def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():
 
 
 # ---------------------------------------------------------------------------
-# _ensure_chromium — the browser binaries.
+# _launch_chromium — the browser binaries.
 #
 # `playwright install chromium` is a ~150 MB step separate from the pip package
 # and nothing in the app lifecycle ran it, so a fresh workspace had the package
 # and no browser. It runs lazily on first export: at activate() it would add
 # minutes to every boot, including the many that never export anything.
+#
+# These tests drive a fake `p.chromium` (BrowserType) handle directly through
+# `.launch()`, rather than stubbing a resolved executable path — an earlier
+# version of this fix DID pre-check `.executable_path` on disk before
+# launching, and that was itself a live bug: playwright's `.executable_path`
+# always names the regular chrome binary, but `launch()` with this app's
+# default `headless=True` silently prefers a separate "headless shell" build
+# when one is installed, so the two were checking different files. Testing
+# through `.launch()` itself can't repeat that mistake.
 # ---------------------------------------------------------------------------
 
-def _reset_ready(monkeypatch, tmp_path):
-    """Reset the per-process flag and point the two checks that now run
-    before it at a clean, isolated state:
+class _FakeBrowser:
+    def __init__(self):
+        self.closed = False
 
-    * ``_chromium_executable_path`` stubbed to ``None`` — "not installed" —
-      so these tests keep exercising the subprocess install path instead of
-      short-circuiting on whatever chromium happens to be on the real test
-      host's disk (see test_already_installed_chromium_skips_install below
-      for the opposite case).
-    * ``AW_WORKSPACE_HOME`` pointed at a throwaway ``tmp_path`` so the
-      cross-process install lock file lands there, not in a real workspace's
-      ``.aw-workspace/locks/``.
+    def close(self):
+        self.closed = True
+
+
+_MISSING_CHROMIUM_ERROR = RuntimeError(
+    "BrowserType.launch: Executable doesn't exist at /some/path\n"
+    "Please run the following command to download new browsers:\n"
+    "    playwright install"
+)
+
+
+class _FakeChromium:
+    """Stands in for the real ``p.chromium`` (``BrowserType``) handle
+    ``_launch_chromium`` now drives directly via ``.launch()``.
+
+    ``launch_results`` is consumed one entry per ``.launch()`` call: an
+    exception instance is raised, anything else is returned as the "browser".
+    """
+
+    def __init__(self, launch_results):
+        self._results = list(launch_results)
+        self.launch_calls = 0
+
+    def launch(self, **kwargs):
+        self.launch_calls += 1
+        result = self._results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+
+def _reset_ready(monkeypatch, tmp_path, launch_results=None):
+    """Reset the per-process flag and point ``AW_WORKSPACE_HOME`` at a
+    throwaway ``tmp_path`` so the cross-process install lock file lands
+    there, not in a real workspace's ``.aw-workspace/locks/``.
+
+    Returns a ``_FakeChromium`` whose default ``launch_results`` is "fails
+    once with playwright's own 'not installed' error, then succeeds" — the
+    genuine first-install shape these tests exercise by default.
     """
     monkeypatch.setattr(routes_mod, "_chromium_ready", False, raising=False)
-    monkeypatch.setattr(routes_mod, "_chromium_executable_path", lambda: None)
     monkeypatch.setenv("AW_WORKSPACE_HOME", str(tmp_path))
+    if launch_results is None:
+        launch_results = [_MISSING_CHROMIUM_ERROR, _FakeBrowser()]
+    return _FakeChromium(launch_results)
 
 
 class _Ok:
@@ -346,25 +388,26 @@ def test_chromium_is_installed_with_its_system_libraries(monkeypatch, tmp_path):
     """--with-deps is not optional here: the workspace image carries no GUI
     stack, so without it the browser binary lands and dies on launch with
     "Target page, context or browser has been closed" (ldd: 17 not-found)."""
-    _reset_ready(monkeypatch, tmp_path)
+    chromium = _reset_ready(monkeypatch, tmp_path)
     monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
-    routes_mod._ensure_chromium()
+    routes_mod._launch_chromium(chromium)
 
     assert len(calls) == 1
     assert calls[0][1:] == ["-m", "playwright", "install", "--with-deps", "chromium"]
+    assert chromium.launch_calls == 2, "first attempt fails, second (post-install) succeeds"
 
 
 def test_sudo_is_used_when_available(monkeypatch, tmp_path):
     """--with-deps shells out to apt; the workspace runs as uid 1001."""
-    _reset_ready(monkeypatch, tmp_path)
+    chromium = _reset_ready(monkeypatch, tmp_path)
     monkeypatch.setattr(routes_mod, "_has_sudo", lambda: True)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
-    routes_mod._ensure_chromium()
+    routes_mod._launch_chromium(chromium)
 
     assert calls[0][:2] == ["sudo", "-n"]
 
@@ -373,7 +416,7 @@ def test_falls_back_to_the_unprivileged_form_when_sudo_fails(monkeypatch, tmp_pa
     """A sudo that exists but is refused for this command must not be the end
     of it — the plain install still helps a container that already has the
     libraries."""
-    _reset_ready(monkeypatch, tmp_path)
+    chromium = _reset_ready(monkeypatch, tmp_path)
     monkeypatch.setattr(routes_mod, "_has_sudo", lambda: True)
     calls = []
 
@@ -383,67 +426,84 @@ def test_falls_back_to_the_unprivileged_form_when_sudo_fails(monkeypatch, tmp_pa
 
     monkeypatch.setattr(routes_mod.subprocess, "run", _run)
 
-    routes_mod._ensure_chromium()
+    routes_mod._launch_chromium(chromium)
 
     assert len(calls) == 2
     assert calls[0][0] == "sudo" and calls[1][0] != "sudo"
 
 
 def test_chromium_is_not_reinstalled_on_every_export(monkeypatch, tmp_path):
-    _reset_ready(monkeypatch, tmp_path)
+    chromium = _reset_ready(monkeypatch, tmp_path, launch_results=[
+        _MISSING_CHROMIUM_ERROR, _FakeBrowser(), _FakeBrowser(), _FakeBrowser(),
+    ])
     monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
 
-    routes_mod._ensure_chromium()
-    routes_mod._ensure_chromium()
-    routes_mod._ensure_chromium()
+    routes_mod._launch_chromium(chromium)
+    routes_mod._launch_chromium(chromium)
+    routes_mod._launch_chromium(chromium)
 
-    assert len(calls) == 1
+    assert len(calls) == 1, "only the first call's failed attempt should trigger an install"
 
 
 def test_a_failed_install_raises_and_is_retried_next_time(monkeypatch, tmp_path):
     """A transient network failure must not be latched as 'ready' — the next
     export has to try again rather than fail forever on a stale flag."""
-    _reset_ready(monkeypatch, tmp_path)
+    chromium = _reset_ready(monkeypatch, tmp_path, launch_results=[
+        _MISSING_CHROMIUM_ERROR, _MISSING_CHROMIUM_ERROR,
+    ])
     monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     calls = []
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Fail())
 
     with pytest.raises(RuntimeError, match="playwright install chromium failed"):
-        routes_mod._ensure_chromium()
+        routes_mod._launch_chromium(chromium)
     with pytest.raises(RuntimeError):
-        routes_mod._ensure_chromium()
+        routes_mod._launch_chromium(chromium)
 
     assert len(calls) == 2
+    assert chromium.launch_calls == 2, "a failed install must not attempt the retry launch"
 
 
-def test_already_installed_chromium_skips_the_subprocess_entirely(monkeypatch, tmp_path):
+def test_launch_succeeding_immediately_skips_the_install_subprocess_entirely(monkeypatch, tmp_path):
     """The WORKERS=10 bug: a worker that has never personally run this before
     must not re-run `playwright install --with-deps chromium` (and its
     apt-get) just because ITS OWN `_chromium_ready` flag happens to be unset
-    — if the binary is already on disk (another worker installed it, or it
-    was baked into the image), skip the subprocess path altogether."""
-    _reset_ready(monkeypatch, tmp_path)
-    fake_exe = tmp_path / "chrome"
-    fake_exe.write_bytes(b"")
-    monkeypatch.setattr(routes_mod, "_chromium_executable_path", lambda: str(fake_exe))
+    — if the browser launches fine on the first try (already on disk,
+    whichever binary variant `launch()` actually needed), there is nothing
+    to install."""
+    chromium = _reset_ready(monkeypatch, tmp_path, launch_results=[_FakeBrowser()])
     monkeypatch.setattr(routes_mod.subprocess, "run",
                          lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not shell out")))
 
-    routes_mod._ensure_chromium()
+    routes_mod._launch_chromium(chromium)
 
     assert routes_mod._chromium_ready is True
+    assert chromium.launch_calls == 1
+
+
+def test_an_unrelated_launch_failure_is_not_mistaken_for_missing_chromium(monkeypatch, tmp_path):
+    """A crash that ISN'T playwright's own "not installed" message (e.g. a
+    real sandbox/permission problem) must propagate immediately — treating
+    every launch failure as "go install" would waste an apt-get on a problem
+    `playwright install` can't fix, and would mask the real error."""
+    chromium = _reset_ready(monkeypatch, tmp_path, launch_results=[RuntimeError("something else crashed")])
+    monkeypatch.setattr(routes_mod.subprocess, "run",
+                         lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not shell out")))
+
+    with pytest.raises(RuntimeError, match="something else crashed"):
+        routes_mod._launch_chromium(chromium)
 
 
 def test_install_is_serialized_across_worker_processes(monkeypatch, tmp_path):
     """`_chromium_ready` is per-process; the actual cross-process guard is the
     flock on `_chromium_install_lock_path()`. Simulate a second worker already
     holding that lock (a non-blocking LOCK_EX from a separate fd fails
-    immediately) and confirm `_ensure_chromium` blocks on it rather than
+    immediately) and confirm `_launch_chromium` blocks on it rather than
     racing `apt-get` — proven here by checking the lock is contended, then
-    released once `_ensure_chromium` returns."""
-    _reset_ready(monkeypatch, tmp_path)
+    released once `_launch_chromium` returns."""
+    chromium = _reset_ready(monkeypatch, tmp_path)
     monkeypatch.setattr(routes_mod, "_has_sudo", lambda: False)
     monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: _Ok())
 
@@ -465,10 +525,10 @@ def test_install_is_serialized_across_worker_processes(monkeypatch, tmp_path):
         fcntl.flock(other_fd, fcntl.LOCK_UN)
         os.close(other_fd)
 
-    routes_mod._ensure_chromium()
+    routes_mod._launch_chromium(chromium)
     assert routes_mod._chromium_ready is True
 
-    # The real guard: _ensure_chromium released its own lock on the way out,
+    # The real guard: _launch_chromium released its own lock on the way out,
     # so a fresh fd can now take it without blocking.
     check_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
@@ -485,7 +545,7 @@ def test_render_launches_its_own_browser_and_closes_it(monkeypatch, tmp_path):
     import types
 
     _reset_ready(monkeypatch, tmp_path)
-    monkeypatch.setattr(routes_mod, "_ensure_chromium", lambda: None)
+    monkeypatch.setattr(routes_mod, "_launch_chromium", lambda chromium: chromium.launch())
 
     state = {"launched": False, "closed": False, "written": None}
 

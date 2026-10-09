@@ -241,25 +241,6 @@ _INSTALL_LOCK = threading.Lock()
 _chromium_ready = False
 
 
-def _chromium_executable_path() -> str | None:
-    """Ask playwright itself where it expects chromium's binary to live —
-    without launching it. Resolving this ourselves (rather than hardcoding
-    ``chromium-<rev>``) stays correct across playwright version bumps, which
-    change the revision folder name.
-
-    ``None`` means "could not tell" (e.g. the pip package itself is missing),
-    which ``_ensure_chromium`` treats the same as "not installed" rather than
-    raising here — the existing install attempt below already knows how to
-    fail loudly.
-    """
-    try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            return p.chromium.executable_path
-    except Exception:  # noqa: BLE001 — "unknown" must fall through to install
-        return None
-
-
 def _chromium_install_lock_path() -> str:
     """A path every one of the 10 ``AW_WORKSPACE_WORKERS`` processes can see
     and flock — same host-mounted tree core itself uses for durable,
@@ -274,13 +255,28 @@ def _chromium_install_lock_path() -> str:
     return os.path.join(lock_dir, "presentations-chromium-install.lock")
 
 
-def _ensure_chromium() -> None:
-    """Install playwright's chromium AND its system libraries, once, lazily.
+def _is_missing_chromium_error(exc: Exception) -> bool:
+    """True for playwright's own "the browser binary isn't on disk" error —
+    the ONE failure shape `_launch_chromium` should react to by installing.
+    Anything else (a real crash, a sandbox issue, missing OS libs) is a
+    different problem and must not trigger a wasted install + apt-get."""
+    return "Executable doesn't exist" in str(exc) and "playwright install" in str(exc)
+
+
+def _install_chromium_once() -> None:
+    """Actually run `playwright install --with-deps chromium`, serialized
+    across all 10 ``AW_WORKSPACE_WORKERS`` PROCESSES via an ``fcntl.flock``
+    on a file under ``AW_WORKSPACE_HOME`` (visible to every worker) — not a
+    process-local lock — so two workers that both hit a genuine first-install
+    near-simultaneously queue for the lock instead of racing `apt-get` and
+    colliding on `/var/lib/dpkg/lock-frontend`.
 
     Two separate installs, and missing either one leaves a browser that cannot
     start:
 
-    * ``playwright install chromium`` fetches the ~150 MB browser build.
+    * ``playwright install chromium`` fetches the ~150 MB browser build (and,
+      by default, the separate "headless shell" build too — see
+      ``_launch_chromium``'s docstring for why that second build matters).
     * ``--with-deps`` apt-installs the ~17 shared libraries it links against
       (libnss3, libglib, libatk, the libX* set...). The workspace image does not
       carry a GUI stack, so without this the binary is present and dies on
@@ -291,68 +287,32 @@ def _ensure_chromium() -> None:
     runs as uid 1001 with NOPASSWD sudo, so it is prefixed when available and
     the plain form is tried otherwise (a container without sudo either already
     has the libraries or cannot get them, and the error below says which).
-
-    Lazy, not at activate(): this is minutes of download plus an apt run, and
-    most workspaces never export anything.
-
-    ``_chromium_ready`` is per-PROCESS state, and ``AW_WORKSPACE_WORKERS=10``
-    runs this app across 10 separate worker processes (docker-compose.yml) —
-    so a worker that has never personally run this before would, without the
-    disk check below, re-run the full install (and its ``apt-get``) on its own
-    first export, even when the browser has been sitting on disk for months.
-    Two such installs landing on two different workers collide on
-    ``/var/lib/dpkg/lock-frontend``. So: check disk reality first (covers the
-    overwhelmingly common case — already installed), and only take the
-    cross-process file lock for the genuine first-install case, to serialize
-    workers instead of letting them race `apt-get` concurrently.
     """
-    global _chromium_ready
-    if _chromium_ready:
-        return
-    with _INSTALL_LOCK:
-        if _chromium_ready:
-            return
-
-        exe = _chromium_executable_path()
-        if exe and os.path.exists(exe):
-            _chromium_ready = True
-            _log.info("presentations: chromium already installed at %s", exe)
-            return
-
-        lock_path = _chromium_install_lock_path()
-        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
-            # Another worker may have installed it while we waited on the lock.
-            exe = _chromium_executable_path()
-            if exe and os.path.exists(exe):
-                _chromium_ready = True
-                _log.info("presentations: chromium installed by another worker "
-                          "while waiting on the cross-process lock")
+    lock_path = _chromium_install_lock_path()
+    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        base = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
+        cmds = [["sudo", "-n", *base], base] if _has_sudo() else [base]
+        last = ""
+        for cmd in cmds:
+            _log.info("presentations: installing chromium for PNG export (first use): %s",
+                      " ".join(cmd[:4]))
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+            except Exception as exc:  # noqa: BLE001 — try the next form
+                last = str(exc)
+                continue
+            if proc.returncode == 0:
+                _log.info("presentations: chromium install finished")
                 return
-
-            base = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
-            cmds = [["sudo", "-n", *base], base] if _has_sudo() else [base]
-            last = ""
-            for cmd in cmds:
-                _log.info("presentations: installing chromium for PNG export (first use): %s",
-                          " ".join(cmd[:4]))
-                try:
-                    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
-                except Exception as exc:  # noqa: BLE001 — try the next form
-                    last = str(exc)
-                    continue
-                if proc.returncode == 0:
-                    _chromium_ready = True
-                    _log.info("presentations: chromium ready")
-                    return
-                last = (proc.stderr or proc.stdout or "")[-400:]
-            # Deliberately do NOT set the flag — a transient failure (no network,
-            # apt lock held) must be retried by the next export, not latched.
-            raise RuntimeError("playwright install chromium failed: " + last)
-        finally:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            os.close(lock_fd)
+            last = (proc.stderr or proc.stdout or "")[-400:]
+        # Deliberately do NOT latch anything as ready — a transient failure
+        # (no network, apt lock held) must be retried by the next export.
+        raise RuntimeError("playwright install chromium failed: " + last)
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
 
 
 def _has_sudo() -> bool:
@@ -363,14 +323,69 @@ def _has_sudo() -> bool:
         return False
 
 
+def _launch_chromium(chromium):
+    """Launch this app's own headless Chromium, installing it first if this
+    is the first export to need it on this worker.
+
+    Does NOT pre-check a resolved executable path on disk before launching —
+    an earlier version of this fix did exactly that (stat
+    ``chromium.executable_path``) and still hit a live failure on
+    2026-10-09: ``.executable_path`` always reports the REGULAR chrome
+    binary (``chromium-<rev>/chrome-linux64/chrome``), but ``launch()`` with
+    this app's default ``headless=True`` silently prefers a SEPARATE
+    "headless shell" build (``chromium_headless_shell-<rev>/...``) when one
+    is installed — confirmed by watching the actual launch command in
+    playwright's own browser log. A worker whose ``$HOME/.cache/ms-playwright``
+    had the regular build but not the headless-shell one (plausible after a
+    playwright version bump started preferring the shell build, with the
+    regular build surviving from an older install) would pass a
+    `.executable_path` disk check and then still fail to launch — the two
+    checks were simply looking at different files.
+
+    So: just attempt the real launch. It fails fast and in the exact same
+    way regardless of which binary variant is missing, which sidesteps the
+    whole "which path does this playwright version actually use" question
+    instead of trying to keep re-guessing it correctly. Only a failure
+    matching playwright's own "not installed" message triggers the (cross-
+    process-locked) install; anything else propagates immediately.
+
+    ``_chromium_ready`` is a per-PROCESS cache of "a launch has already
+    succeeded here" — ``AW_WORKSPACE_WORKERS=10`` runs this app across 10
+    separate worker processes (docker-compose.yml), so this flag being unset
+    on one worker says nothing about whether the browser is actually on
+    disk; the launch attempt itself is what answers that, every time this
+    flag is still false.
+    """
+    global _chromium_ready
+    if _chromium_ready:
+        return chromium.launch(args=["--no-sandbox"])
+
+    with _INSTALL_LOCK:
+        if _chromium_ready:
+            return chromium.launch(args=["--no-sandbox"])
+
+        try:
+            browser = chromium.launch(args=["--no-sandbox"])
+        except Exception as exc:
+            if not _is_missing_chromium_error(exc):
+                raise
+            _install_chromium_once()
+            # Let this raise straight through if it still fails — a second
+            # "not installed" right after a reported-successful install is a
+            # real, unexpected problem, not one to retry silently.
+            browser = chromium.launch(args=["--no-sandbox"])
+
+        _chromium_ready = True
+        return browser
+
+
 def _render_html_to_png(html: str, output_path: str, width: int, height: int,
                         scale: float) -> None:
     """Render HTML to PNG in this app's own headless Chromium."""
     from playwright.sync_api import sync_playwright
 
-    _ensure_chromium()
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--no-sandbox"])
+        browser = _launch_chromium(p.chromium)
         try:
             context = browser.new_context(viewport={"width": width, "height": height},
                                           device_scale_factor=scale)
@@ -389,6 +404,6 @@ def _playwright_unavailable_reason(exc: Exception) -> str | None:
     error names the missing executable path)."""
     if isinstance(exc, ModuleNotFoundError) and "playwright" in str(exc):
         return "PNG export needs the 'playwright' package, which isn't installed on this server yet."
-    if "Executable doesn't exist" in str(exc) and "playwright install" in str(exc):
+    if _is_missing_chromium_error(exc):
         return "PNG export needs playwright's browser binaries (`playwright install chromium`), not installed on this server yet."
     return None
