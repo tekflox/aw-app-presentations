@@ -412,6 +412,27 @@ def test_sudo_is_used_when_available(monkeypatch, tmp_path):
     assert calls[0][:2] == ["sudo", "-n"]
 
 
+def test_sudo_form_carries_home_through_so_the_download_lands_where_launch_looks(
+        monkeypatch, tmp_path):
+    """Live bug, 2026-10-09: a bare `sudo -n` resets $HOME to root's home
+    (Debian/Ubuntu default env_reset + always_set_home), so the download
+    landed in /root/.cache/ms-playwright while the later unprivileged
+    chromium.launch() looked in the real user's ~/.cache/ms-playwright and
+    found nothing — install reported success, launch still failed. The sudo
+    form must explicitly pass the real $HOME through."""
+    chromium = _reset_ready(monkeypatch, tmp_path)
+    monkeypatch.setattr(routes_mod, "_has_sudo", lambda: True)
+    monkeypatch.setenv("HOME", "/home/ubuntu")
+    calls = []
+    monkeypatch.setattr(routes_mod.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or _Ok())
+
+    routes_mod._launch_chromium(chromium)
+
+    assert calls[0][:2] == ["sudo", "-n"]
+    assert "env" in calls[0]
+    assert "HOME=/home/ubuntu" in calls[0]
+
+
 def test_falls_back_to_the_unprivileged_form_when_sudo_fails(monkeypatch, tmp_path):
     """A sudo that exists but is refused for this command must not be the end
     of it — the plain install still helps a container that already has the

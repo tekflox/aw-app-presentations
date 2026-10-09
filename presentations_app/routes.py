@@ -287,13 +287,27 @@ def _install_chromium_once() -> None:
     runs as uid 1001 with NOPASSWD sudo, so it is prefixed when available and
     the plain form is tried otherwise (a container without sudo either already
     has the libraries or cannot get them, and the error below says which).
+
+    The sudo'd form explicitly carries ``HOME`` through to the child process
+    (``sudo -n env HOME=<real home> ...``) rather than a bare ``sudo -n``.
+    Confirmed live on 2026-10-09: sudo's default Debian/Ubuntu policy
+    (``env_reset`` + ``always_set_home``) resets ``$HOME`` to ROOT's home for
+    the duration of the sudo'd command, so a bare ``sudo -n`` install writes
+    the downloaded browser to ``/root/.cache/ms-playwright`` — the install
+    genuinely succeeds (exit 0) — while every later ``chromium.launch()``
+    runs as the unprivileged app user and looks in THAT user's
+    ``~/.cache/ms-playwright``, which never received anything. Looked
+    exactly like "still not installed" after a reportedly successful
+    install, which is what made it so easy to miss.
     """
     lock_path = _chromium_install_lock_path()
     lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
         base = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
-        cmds = [["sudo", "-n", *base], base] if _has_sudo() else [base]
+        real_home = os.environ.get("HOME", os.path.expanduser("~"))
+        cmds = ([["sudo", "-n", "env", f"HOME={real_home}", *base], base]
+                if _has_sudo() else [base])
         last = ""
         for cmd in cmds:
             _log.info("presentations: installing chromium for PNG export (first use): %s",
