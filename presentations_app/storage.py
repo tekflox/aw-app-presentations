@@ -18,6 +18,8 @@ import os
 import time
 import uuid
 
+from .search_text import extract_search_text, normalize
+
 logger = logging.getLogger("presentations_app.storage")
 
 _TABLE = "app__presentations__records"
@@ -32,7 +34,8 @@ _TABLE_DDL = """
     session_id TEXT,
     tags TEXT NOT NULL DEFAULT '[]',
     created_at DOUBLE PRECISION,
-    updated_at DOUBLE PRECISION
+    updated_at DOUBLE PRECISION,
+    search_text TEXT
 """
 
 _SHARE_TABLE_DDL = """
@@ -118,6 +121,16 @@ class PresentationStore:
         self._relay_up = False
         ctx.db.create(_TABLE, _TABLE_DDL)
         ctx.db.create(_SHARE_TABLE, _SHARE_TABLE_DDL)
+        # Migrate the LIVE table for installs that predate this column — a
+        # fresh table (and the sqlite FakeDb in tests) already has it from
+        # _TABLE_DDL above and raises duplicate-column here, swallowed. Same
+        # pattern as aw-app-remote-screen's POST_INIT_COLUMNS swallow
+        # (remote_screen_app/__main__.py). Catches broadly: sqlite raises
+        # OperationalError, real Postgres raises sqlalchemy's ProgrammingError.
+        try:
+            ctx.db.execute(_TABLE, "ALTER TABLE {table} ADD COLUMN search_text TEXT", {})
+        except Exception:
+            pass
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
@@ -161,15 +174,16 @@ class PresentationStore:
         cid = presentation_id or f"presentation-{uuid.uuid4().hex[:12]}"
         merged_tags = _normalize_tags(list(tags or []) + _env_inherited_tags())
         p = Presentation(cid, title, html, visible=visible, session_id=session_id, tags=merged_tags)
+        search_text = extract_search_text(p.title, p.html)
         self._ctx.db.execute(
             _TABLE,
-            "INSERT INTO {table} (id, title, html, visible, session_id, tags, created_at, updated_at) "
-            "VALUES (:id, :title, :html, :visible, :session_id, :tags, :created_at, :updated_at) "
+            "INSERT INTO {table} (id, title, html, visible, session_id, tags, created_at, updated_at, search_text) "
+            "VALUES (:id, :title, :html, :visible, :session_id, :tags, :created_at, :updated_at, :search_text) "
             "ON CONFLICT (id) DO UPDATE SET title=:title, html=:html, visible=:visible, "
-            "session_id=:session_id, tags=:tags, updated_at=:updated_at",
+            "session_id=:session_id, tags=:tags, updated_at=:updated_at, search_text=:search_text",
             {"id": p.id, "title": p.title, "html": p.html, "visible": p.visible,
              "session_id": p.session_id, "tags": json.dumps(p.tags),
-             "created_at": p.created_at, "updated_at": p.updated_at},
+             "created_at": p.created_at, "updated_at": p.updated_at, "search_text": search_text},
         )
         logger.info("presentation created: %s (%s)", p.id, p.title)
         self._broadcast({"type": "presentation_update", "action": "create",
@@ -189,11 +203,13 @@ class PresentationStore:
         if tags is not None:
             p.tags = _normalize_tags(tags)
         p.updated_at = time.time()
+        search_text = extract_search_text(p.title, p.html)
         self._ctx.db.execute(
             _TABLE,
-            "UPDATE {table} SET title=:title, html=:html, tags=:tags, updated_at=:updated_at WHERE id=:id",
+            "UPDATE {table} SET title=:title, html=:html, tags=:tags, updated_at=:updated_at, "
+            "search_text=:search_text WHERE id=:id",
             {"id": p.id, "title": p.title, "html": p.html, "tags": json.dumps(p.tags),
-             "updated_at": p.updated_at},
+             "updated_at": p.updated_at, "search_text": search_text},
         )
         logger.info("presentation updated: %s (%s)", p.id, p.title)
         self._broadcast({"type": "presentation_update", "action": "update",
@@ -219,14 +235,33 @@ class PresentationStore:
             return None
         return self._row_to_presentation(row)
 
-    def list_presentations(self, tags_filter: list[str] | None = None) -> list[dict]:
+    def list_presentations(self, tags_filter: list[str] | None = None,
+                           query: str | None = None) -> list[dict]:
         rows = self._ctx.db.execute(_TABLE, "SELECT * FROM {table} ORDER BY created_at DESC", {})
         filt = _normalize_tags(tags_filter) if tags_filter else []
+        nq = normalize(query or "")
         out = []
         for row in rows:
+            m = row._mapping
             p = self._row_to_presentation(row)
             if filt and not all(t in set(p.tags) for t in filt):
                 continue
+            if nq:
+                search_text = m.get("search_text")
+                if search_text is None:
+                    # Legacy row predating this column — extract lazily and
+                    # persist it back so the next search for this row is a
+                    # plain lookup. WHERE search_text IS NULL makes this
+                    # idempotent and race-safe under WORKERS=10: a loser just
+                    # updates zero rows.
+                    search_text = extract_search_text(p.title, p.html)
+                    self._ctx.db.execute(
+                        _TABLE,
+                        "UPDATE {table} SET search_text=:search_text WHERE id=:id AND search_text IS NULL",
+                        {"id": p.id, "search_text": search_text},
+                    )
+                if nq not in search_text:
+                    continue
             out.append(p.to_dict(include_html=False))
         return out
 

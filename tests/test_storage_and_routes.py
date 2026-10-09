@@ -20,7 +20,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from presentations_app import routes as routes_mod  # noqa: E402
+from presentations_app import storage as storage_mod  # noqa: E402
 from presentations_app.storage import PresentationStore  # noqa: E402
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "search"
 
 
 class FakeDb:
@@ -263,6 +266,143 @@ def test_rest_route_contract(client):
     }
     missing = required - routes
     assert not missing, f"external callers depend on these routes, now missing: {missing}"
+
+
+def test_search_matches_body_only_term(client):
+    """criterion 1 — the one that separates this card from a title-only
+    filter: a term present only in the HTML body still surfaces it."""
+    target = client.post("/presentations", json={
+        "title": "Relatório Semanal",
+        "html": "<body><p>Resultados do upgrade de pgvector nesta semana.</p></body>",
+    }).json()["id"]
+    sibling = client.post("/presentations", json={
+        "title": "Outro Relatório",
+        "html": "<body><p>Nada relacionado aqui.</p></body>",
+    }).json()["id"]
+
+    found = client.get("/presentations", params={"q": "pgvector"}).json()
+    ids = {p["id"] for p in found}
+    assert target in ids
+    assert sibling not in ids
+
+
+def test_search_matches_title_only_term(client):
+    """criterion 2 — a term present only in the title still surfaces it."""
+    target = client.post("/presentations", json={
+        "title": "Auditoria CISUC", "html": "<p>sem termo aqui</p>"}).json()["id"]
+
+    found = client.get("/presentations", params={"q": "CISUC"}).json()
+    assert any(p["id"] == target for p in found)
+
+
+def test_search_is_accent_and_case_insensitive_both_ways(client):
+    """criterion 3 — both directions: a plain query finds an accented
+    stored term, and an accented/uppercase query finds a plain stored term."""
+    by_title = client.post("/presentations", json={
+        "title": "Análise", "html": "<p>x</p>"}).json()["id"]
+    by_body = client.post("/presentations", json={
+        "title": "Outro", "html": "<p>Resultado da ação pendente.</p>"}).json()["id"]
+
+    assert any(p["id"] == by_title
+               for p in client.get("/presentations", params={"q": "analise"}).json())
+    assert any(p["id"] == by_body
+               for p in client.get("/presentations", params={"q": "AÇÃO"}).json())
+
+
+def test_markup_terms_do_not_match_content_search(client):
+    """criterion 4 — the card's key test. Every presentation here is built
+    from the dark-theme template in skills/aw-presentation/SKILL.md; a naive
+    raw-HTML substring search would hit all of them on these terms."""
+    html = (FIXTURES_DIR / "dark-theme-template.html").read_text()
+    client.post("/presentations", json={"title": "Relatório Semanal", "html": html})
+
+    for term in ("div", "style", "box-sizing", "#0d1117"):
+        assert client.get("/presentations", params={"q": term}).json() == [], \
+            f"markup term {term!r} must not match"
+
+    assert len(client.get("/presentations", params={"q": "pgvector"}).json()) == 1
+
+
+def test_empty_or_whitespace_query_returns_full_list_newest_first(client):
+    """criterion 5 — empty/whitespace term is a no-op, order unchanged."""
+    first = client.post("/presentations", json={"title": "A", "html": "<p>a</p>"}).json()["id"]
+    second = client.post("/presentations", json={"title": "B", "html": "<p>b</p>"}).json()["id"]
+
+    for q in ("", "   "):
+        listed = client.get("/presentations", params={"q": q}).json()
+        assert [p["id"] for p in listed] == [second, first]
+
+
+def test_list_and_broadcast_payload_excludes_html_and_search_text(store, tmp_path):
+    """Payload regression: neither the list route nor the WS broadcast may
+    ever carry html or the derived search_text — that would smuggle body
+    text into the menu payload, which the PO explicitly forbade.
+
+    Needs its OWN ``with TestClient(app) as client:`` rather than the
+    module's bare ``client`` fixture: a bare ``TestClient(app)`` never binds
+    ``store._loop`` via ``on_event("startup")`` at all on some calls and, on
+    others, each top-level call can bind it to a different portal thread —
+    harmless for a plain request/response, but a broadcast scheduled via
+    ``call_soon_threadsafe`` onto a loop that doesn't match the one the open
+    websocket is bound to hangs forever with no error. Same reasoning as
+    ``test_cross_worker_broadcast_gap.py``'s ``_worker()`` fixture.
+    """
+    app = routes_mod.build_app(store, str(tmp_path))
+    with TestClient(app) as client, client.websocket_connect("/ws") as ws:
+        ws.receive_json()  # presentation_init
+        resp = client.post("/presentations", json={"title": "T", "html": "<p>secret body text</p>"})
+        assert resp.status_code == 200
+        update = ws.receive_json()
+
+        assert "html" not in update["presentation"]
+        assert "search_text" not in update["presentation"]
+
+        for p in client.get("/presentations").json():
+            assert "html" not in p
+            assert "search_text" not in p
+
+
+def test_lazy_backfill_persists_search_text_for_legacy_rows(client, store):
+    """criterion-adjacent: a pre-feature row with NULL search_text is found
+    on first search and the column gets persisted so the next search is a
+    plain lookup."""
+    pid = client.post("/presentations", json={
+        "title": "T", "html": "<p>pgvector backfill term</p>"}).json()["id"]
+    store._ctx.db.execute(storage_mod._TABLE, "UPDATE {table} SET search_text=NULL WHERE id=:id",
+                          {"id": pid})
+
+    rows = store._ctx.db.execute(storage_mod._TABLE, "SELECT * FROM {table} WHERE id=:id", {"id": pid})
+    assert rows[0]._mapping["search_text"] is None
+
+    found = client.get("/presentations", params={"q": "pgvector"}).json()
+    assert any(p["id"] == pid for p in found)
+
+    rows = store._ctx.db.execute(storage_mod._TABLE, "SELECT * FROM {table} WHERE id=:id", {"id": pid})
+    assert rows[0]._mapping["search_text"] is not None
+
+
+def test_malformed_html_with_stray_closing_tag_is_not_stuck_skipping(client):
+    """criterion 8 — a stray </div> landing right after a real </style>
+    close must not leave extraction stuck treating everything after as
+    markup content."""
+    html = ("<html><body><style>body{color:red} <div>Oops</style></div> "
+            "Still visible after malformed markup.</body></html>")
+    pid = client.post("/presentations", json={"title": "Malformed Doc", "html": html}).json()["id"]
+
+    found = client.get("/presentations", params={"q": "visible"}).json()
+    assert any(p["id"] == pid for p in found)
+
+
+def test_unclosed_style_tag_does_not_crash_or_blank_the_title_search(client):
+    """criterion 8 — an unclosed <style> (no closing literal anywhere in the
+    document) must not raise and must not make the row unsearchable by its
+    title, even though the body text after it is unrecoverable."""
+    html = "<html><body><style>body{color:red}</body></html>"
+    pid = client.post("/presentations", json={
+        "title": "Unclosed Style Title", "html": html}).json()["id"]
+
+    found = client.get("/presentations", params={"q": "unclosed"}).json()
+    assert any(p["id"] == pid for p in found)
 
 
 def test_activate_sets_broadcast_loop_without_relying_on_asgi_startup():

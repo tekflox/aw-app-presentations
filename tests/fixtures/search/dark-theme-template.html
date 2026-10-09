@@ -1,0 +1,58 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0;
+         padding: clamp(12px, 4vw, 24px); background: #0d1117; color: #c9d1d9;
+         overflow-wrap: anywhere; }
+  .header { border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 24px; }
+  .header h1 { color: #58a6ff; margin: 0 0 8px; font-size: clamp(20px, 5vw, 30px); }
+  .header .subtitle { color: #8b949e; }
+  .section { margin-bottom: 32px; }
+  .section h2 { color: #58a6ff; border-bottom: 1px solid #21262d; padding-bottom: 8px;
+                font-size: clamp(16px, 4vw, 22px); }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+          padding: clamp(12px, 3vw, 16px); margin: 12px 0; }
+  .card h3 { color: #f0f6fc; margin-top: 0; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .metrics { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  .metric { text-align: center; }
+  .metric .value { font-size: clamp(20px, 6vw, 28px); font-weight: 700; color: #f0f6fc; }
+  .metric .label { font-size: 12px; color: #8b949e; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .badge-green { background: #1b4332; color: #2dd4bf; }
+  .badge-yellow { background: #3d2e00; color: #f0c000; }
+  .badge-red { background: #3d0000; color: #f87171; }
+  .badge-blue { background: #0c2d48; color: #58a6ff; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 600; }
+  code { background: #1f2937; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+        padding: 16px; overflow-x: auto; max-width: 100%; }
+  img, svg, canvas { max-width: 100%; height: auto; }
+  .finding { border-left: 3px solid #58a6ff; padding-left: 12px; margin: 12px 0; }
+  .finding.critical { border-color: #f87171; }
+  .finding.warning { border-color: #f0c000; }
+  .finding.success { border-color: #2dd4bf; }
+  @media (max-width: 640px) {
+    .header { margin-bottom: 16px; }
+    .section { margin-bottom: 20px; }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Relatório Semanal</h1>
+    <div class="subtitle">2026-10-09 &mdash; aw-workspace</div>
+  </div>
+  <!-- sections, cards, findings, metrics, tables, code blocks as needed -->
+  <div class="section">
+    <div class="card">
+      <p>Migração do índice de embeddings para pgvector concluída sem incidentes.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -48,8 +48,9 @@ def build_app(store: PresentationStore, export_dir: str) -> FastAPI:
         store.set_loop(asyncio.get_event_loop())
 
     @api.get("/presentations")
-    async def list_presentations(tag: list[str] | None = Query(default=None)):
-        return store.list_presentations(tags_filter=tag)
+    async def list_presentations(tag: list[str] | None = Query(default=None),
+                                  q: str | None = Query(default=None)):
+        return store.list_presentations(tags_filter=tag, query=q)
 
     @api.post("/presentations")
     async def create_presentation(data: dict = Body(...)):

@@ -64,6 +64,48 @@ export function register(host) {
     const [open, setOpen] = useState(false);
     const closeTimer = useRef(null);
 
+    // Server-side search (title + visible body text) over GET /presentations?q=.
+    // `results` null means "no active search" — the grid falls back to the
+    // full WS-fed `sorted` list. `termRef` mirrors `term` for the WS frame
+    // handler below, which is set up once (see the socket effect's dep
+    // array) and would otherwise only ever see the term at mount time.
+    const [term, setTerm] = useState('');
+    const [results, setResults] = useState(null);
+    const termRef = useRef('');
+    const searchTimer = useRef(null);
+    const searchSeq = useRef(0);
+
+    const runSearch = useCallback((q) => {
+      clearTimeout(searchTimer.current);
+      const trimmed = q.trim();
+      if (!trimmed) {
+        setResults(null);
+        return;
+      }
+      searchTimer.current = setTimeout(async () => {
+        const seq = ++searchSeq.current;
+        try {
+          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations?q=' + encodeURIComponent(trimmed)));
+          const data = await r.json();
+          // Guard against a slower, now-stale response overwriting a
+          // faster, more recent one (fast typing must never flash wrong
+          // results) — only the latest-fired request may still apply.
+          if (seq === searchSeq.current) setResults(Array.isArray(data) ? data : []);
+        } catch {
+          if (seq === searchSeq.current) setResults([]);
+        }
+      }, 200);
+    }, []);
+
+    useEffect(() => () => clearTimeout(searchTimer.current), []);
+
+    const handleTermChange = useCallback((e) => {
+      const value = e.target.value;
+      termRef.current = value;
+      setTerm(value);
+      runSearch(value);
+    }, [runSearch]);
+
     const openPresentation = useCallback((id, title) => {
       window.__awOpenAppWindow?.('presentations.viewer', id, title);
     }, []);
@@ -115,10 +157,18 @@ export function register(host) {
             if (msg.presentation.visible !== false && !msg.silent) {
               openPresentation(msg.presentation.id, msg.presentation.title);
             }
+            // A term is active: membership can only be decided server-side
+            // (the client has no body text to judge against), so re-run
+            // the search rather than guess.
+            if (termRef.current.trim()) runSearch(termRef.current);
           } else if (msg.action === 'update') {
             setPresentations((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
+            if (termRef.current.trim()) runSearch(termRef.current);
           } else if (msg.action === 'delete') {
             setPresentations((prev) => prev.filter((c) => c.id !== msg.id));
+            // Instant local feedback; a re-fetch would also eventually
+            // drop it, but there's nothing to wait on here.
+            setResults((prev) => (prev ? prev.filter((c) => c.id !== msg.id) : prev));
           }
         },
         onStatus: ({ state }) => {
@@ -147,6 +197,9 @@ export function register(host) {
     }, []);
 
     const sorted = [...presentations].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    // null `results` (no active search) falls back to the full WS-fed list;
+    // a non-empty term overlays the latest server-side search response.
+    const visible = results ?? sorted;
 
     return (
       <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
@@ -167,10 +220,27 @@ export function register(host) {
             className="absolute left-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
             style={{ minWidth: 320, maxWidth: 720 }}
           >
-            {sorted.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-[var(--color-text-muted)] italic">
-                No presentations yet. Use <code className="bg-white/10 px-1 rounded">/aw-presentation</code> to create one.
-              </div>
+            {/* Outside the empty/grid branch below on purpose: it must stay
+                mounted (and focused) even while a search drives the visible
+                list to zero results mid-word. */}
+            <input
+              type="text"
+              value={term}
+              onChange={handleTermChange}
+              placeholder="Search title or content…"
+              autoFocus
+              className="w-full mb-2 text-[11px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+            />
+            {visible.length === 0 ? (
+              results !== null ? (
+                <div className="px-4 py-6 text-center text-xs text-[var(--color-text-muted)]">
+                  No results for &ldquo;{term.trim()}&rdquo;
+                </div>
+              ) : (
+                <div className="px-4 py-6 text-center text-xs text-[var(--color-text-muted)] italic">
+                  No presentations yet. Use <code className="bg-white/10 px-1 rounded">/aw-presentation</code> to create one.
+                </div>
+              )
             ) : (
               <>
                 <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
@@ -180,7 +250,7 @@ export function register(host) {
                   className="grid gap-2 overflow-y-auto"
                   style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', maxHeight: '70vh' }}
                 >
-                  {sorted.map((c) => (
+                  {visible.map((c) => (
                     <PresentationThumbnail
                       key={c.id}
                       presentation={c}
