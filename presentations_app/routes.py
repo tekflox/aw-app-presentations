@@ -20,6 +20,7 @@ Differences from the monolith route set:
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
 import logging
 import os
@@ -240,6 +241,39 @@ _INSTALL_LOCK = threading.Lock()
 _chromium_ready = False
 
 
+def _chromium_executable_path() -> str | None:
+    """Ask playwright itself where it expects chromium's binary to live —
+    without launching it. Resolving this ourselves (rather than hardcoding
+    ``chromium-<rev>``) stays correct across playwright version bumps, which
+    change the revision folder name.
+
+    ``None`` means "could not tell" (e.g. the pip package itself is missing),
+    which ``_ensure_chromium`` treats the same as "not installed" rather than
+    raising here — the existing install attempt below already knows how to
+    fail loudly.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            return p.chromium.executable_path
+    except Exception:  # noqa: BLE001 — "unknown" must fall through to install
+        return None
+
+
+def _chromium_install_lock_path() -> str:
+    """A path every one of the 10 ``AW_WORKSPACE_WORKERS`` processes can see
+    and flock — same host-mounted tree core itself uses for durable,
+    cross-process state (see ``src/apps/paths.py``'s ``workspace_home()``),
+    duplicated narrowly here rather than imported so this app doesn't reach
+    into core's package for one path string."""
+    home = os.environ.get("AW_WORKSPACE_HOME") or os.path.join(
+        os.environ.get("AW_WORKSPACE_CONTAINER_DIR", "/opt/aw-workspace"), ".aw-workspace"
+    )
+    lock_dir = os.path.join(home, "locks")
+    os.makedirs(lock_dir, exist_ok=True)
+    return os.path.join(lock_dir, "presentations-chromium-install.lock")
+
+
 def _ensure_chromium() -> None:
     """Install playwright's chromium AND its system libraries, once, lazily.
 
@@ -259,9 +293,18 @@ def _ensure_chromium() -> None:
     has the libraries or cannot get them, and the error below says which).
 
     Lazy, not at activate(): this is minutes of download plus an apt run, and
-    most workspaces never export anything. Idempotent afterwards — `playwright
-    install` no-ops when the browser is present, and the module flag skips even
-    that subprocess.
+    most workspaces never export anything.
+
+    ``_chromium_ready`` is per-PROCESS state, and ``AW_WORKSPACE_WORKERS=10``
+    runs this app across 10 separate worker processes (docker-compose.yml) —
+    so a worker that has never personally run this before would, without the
+    disk check below, re-run the full install (and its ``apt-get``) on its own
+    first export, even when the browser has been sitting on disk for months.
+    Two such installs landing on two different workers collide on
+    ``/var/lib/dpkg/lock-frontend``. So: check disk reality first (covers the
+    overwhelmingly common case — already installed), and only take the
+    cross-process file lock for the genuine first-install case, to serialize
+    workers instead of letting them race `apt-get` concurrently.
     """
     global _chromium_ready
     if _chromium_ready:
@@ -269,25 +312,47 @@ def _ensure_chromium() -> None:
     with _INSTALL_LOCK:
         if _chromium_ready:
             return
-        base = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
-        cmds = [["sudo", "-n", *base], base] if _has_sudo() else [base]
-        last = ""
-        for cmd in cmds:
-            _log.info("presentations: installing chromium for PNG export (first use): %s",
-                      " ".join(cmd[:4]))
-            try:
-                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
-            except Exception as exc:  # noqa: BLE001 — try the next form
-                last = str(exc)
-                continue
-            if proc.returncode == 0:
+
+        exe = _chromium_executable_path()
+        if exe and os.path.exists(exe):
+            _chromium_ready = True
+            _log.info("presentations: chromium already installed at %s", exe)
+            return
+
+        lock_path = _chromium_install_lock_path()
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            # Another worker may have installed it while we waited on the lock.
+            exe = _chromium_executable_path()
+            if exe and os.path.exists(exe):
                 _chromium_ready = True
-                _log.info("presentations: chromium ready")
+                _log.info("presentations: chromium installed by another worker "
+                          "while waiting on the cross-process lock")
                 return
-            last = (proc.stderr or proc.stdout or "")[-400:]
-        # Deliberately do NOT set the flag — a transient failure (no network,
-        # apt lock held) must be retried by the next export, not latched.
-        raise RuntimeError("playwright install chromium failed: " + last)
+
+            base = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
+            cmds = [["sudo", "-n", *base], base] if _has_sudo() else [base]
+            last = ""
+            for cmd in cmds:
+                _log.info("presentations: installing chromium for PNG export (first use): %s",
+                          " ".join(cmd[:4]))
+                try:
+                    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+                except Exception as exc:  # noqa: BLE001 — try the next form
+                    last = str(exc)
+                    continue
+                if proc.returncode == 0:
+                    _chromium_ready = True
+                    _log.info("presentations: chromium ready")
+                    return
+                last = (proc.stderr or proc.stdout or "")[-400:]
+            # Deliberately do NOT set the flag — a transient failure (no network,
+            # apt lock held) must be retried by the next export, not latched.
+            raise RuntimeError("playwright install chromium failed: " + last)
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
 
 
 def _has_sudo() -> bool:
