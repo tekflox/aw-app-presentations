@@ -302,17 +302,42 @@ def _install_chromium_once() -> None:
                 proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
             except Exception as exc:  # noqa: BLE001 — try the next form
                 last = str(exc)
+                _trace_install_attempt(cmd, returncode=None, detail=last)
                 continue
             if proc.returncode == 0:
                 _log.info("presentations: chromium install finished")
+                _trace_install_attempt(cmd, returncode=0, detail="ok")
                 return
             last = (proc.stderr or proc.stdout or "")[-400:]
+            _trace_install_attempt(cmd, returncode=proc.returncode, detail=last)
         # Deliberately do NOT latch anything as ready — a transient failure
         # (no network, apt lock held) must be retried by the next export.
         raise RuntimeError("playwright install chromium failed: " + last)
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         os.close(lock_fd)
+
+
+def _trace_install_attempt(cmd: list[str], returncode: int | None, detail: str) -> None:
+    """Append one line to a durable, append-only trace of every real install
+    attempt — not just ``_log.info``/``_log.exception``, which land in this
+    workspace's SigNoz sink and are unreachable from a plain agent-runner
+    container (see CLAUDE.md: "workspace core python logs go to SigNoz, not
+    podman logs"). This exact failure class has twice needed a human/agent
+    to see what the install subprocess actually did without SigNoz access —
+    cheap enough (one short line) to leave in permanently rather than re-add
+    as a throwaway diagnostic the next time this is debugged."""
+    try:
+        home = os.environ.get("AW_WORKSPACE_HOME") or os.path.join(
+            os.environ.get("AW_WORKSPACE_CONTAINER_DIR", "/opt/aw-workspace"), ".aw-workspace"
+        )
+        path = os.path.join(home, "presentations-chromium-install.log")
+        line = (f"{time.time():.0f} pid={os.getpid()} cmd={' '.join(cmd)} "
+                f"returncode={returncode} detail={detail!r}\n")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:  # noqa: BLE001 — tracing must never break the install path
+        pass
 
 
 def _has_sudo() -> bool:
