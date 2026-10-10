@@ -949,7 +949,7 @@ function Pt(e) {
       {
         ref: h,
         onClick: () => {
-          u(!1), $(null), setShareCopied(!1), J((W) => W ? !1 : (X(h), !0));
+          u(!1), $(null), J((W) => W ? !1 : (X(h), !0));
         },
         className: "p-1 rounded hover:bg-white/10 text-[var(--color-text-muted)]",
         title: "Share presentation"

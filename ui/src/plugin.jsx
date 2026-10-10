@@ -838,7 +838,6 @@ export function register(host) {
           onClick={() => {
             setRenameOpen(false);
             setShareLink(null);
-            setShareCopied(false);
             setShareOpen((open) => {
               if (open) return false;
               anchorTo(shareBtnRef);
