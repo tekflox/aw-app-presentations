@@ -37,6 +37,12 @@
 //    DOM CustomEvent the nav already dispatches (also consumed by
 //    aw-app-whiteboard/aw-app-tasks's own GeneratedAssets refresh — this
 //    app is the one that originates that broadcast).
+//
+// 3. PresentationsGalleryBody -> core.window.body:presentations.gallery
+//    (2026-10-09 card). A full browsing window for the same data the nav's
+//    hover popover shows — both read/write through usePresentationGallery()
+//    and render through PresentationGalleryPanel, defined once in section 1b
+//    below, so there is one fetch/search/grid implementation, not two.
 
 import { toPng } from 'html-to-image';
 
@@ -57,7 +63,118 @@ export function register(host) {
   const REFERENCE_HEIGHT = 832;
 
   // ------------------------------------------------------------------
-  // 1. Nav entry (top bar) + standing WS + global open-by-id hook
+  // 0. Shared gallery search+list hook — the ONE implementation of
+  // fetch+search+visible-list logic used by BOTH the nav's hover popover
+  // (brought back 2026-10-10 alongside the gallery window, which stays)
+  // and the gallery window body. Two copies of this would drift exactly
+  // like the export fallback chain further down this file already warns
+  // about for a different pair of call sites — so there is one.
+  //
+  // Pass an existing `list` (the nav's own WS-fed array) to have the hook
+  // search over it without doing its own fetch — that's the popover's
+  // call, since the nav slot is always mounted and already holds a live
+  // list. Omit `list` to have the hook fetch its own via REST on mount and
+  // keep it in sync off the 'aw-presentation-update' CustomEvent instead —
+  // that's the gallery WINDOW's call, since it isn't always mounted and so
+  // can't piggyback on the nav's standing WS subscription.
+  // ------------------------------------------------------------------
+  function usePresentationGallery(list) {
+    const fetchOwn = list === undefined;
+    const [ownList, setOwnList] = useState([]);
+    const [loading, setLoading] = useState(fetchOwn);
+    const [term, setTerm] = useState('');
+    const [results, setResults] = useState(null);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const termRef = useRef('');
+    const searchTimer = useRef(null);
+    const searchSeq = useRef(0);
+
+    useEffect(() => {
+      if (!fetchOwn) return;
+      (async () => {
+        try {
+          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations'));
+          const data = await r.json();
+          setOwnList(Array.isArray(data) ? data : []);
+        } catch {
+          setOwnList([]);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, [fetchOwn]);
+
+    const runSearch = useCallback((q) => {
+      clearTimeout(searchTimer.current);
+      const trimmed = q.trim();
+      if (!trimmed) {
+        setResults(null);
+        setSearchLoading(false);
+        return;
+      }
+      setSearchLoading(true);
+      searchTimer.current = setTimeout(async () => {
+        const seq = ++searchSeq.current;
+        try {
+          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations?q=' + encodeURIComponent(trimmed)));
+          const data = await r.json();
+          // Stale-response guard: only the latest-fired request may still apply.
+          if (seq === searchSeq.current) { setResults(Array.isArray(data) ? data : []); setSearchLoading(false); }
+        } catch {
+          if (seq === searchSeq.current) { setResults([]); setSearchLoading(false); }
+        }
+      }, 200);
+    }, []);
+
+    useEffect(() => () => clearTimeout(searchTimer.current), []);
+
+    const handleTermChange = useCallback((e) => {
+      const value = e.target.value;
+      termRef.current = value;
+      setTerm(value);
+      runSearch(value);
+    }, [runSearch]);
+
+    useEffect(() => {
+      const handler = (e) => {
+        const msg = e.detail;
+        if (!msg || msg.type !== 'presentation_update') return;
+        if (fetchOwn) {
+          if (msg.action === 'create') {
+            setOwnList((prev) => [...prev.filter((c) => c.id !== msg.presentation.id), msg.presentation]);
+          } else if (msg.action === 'update') {
+            setOwnList((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
+          } else if (msg.action === 'delete') {
+            setOwnList((prev) => prev.filter((c) => c.id !== msg.id));
+          }
+        }
+        // Membership/ranking can only be judged server-side (the client has
+        // no body text to search against) — re-run rather than guess.
+        if (msg.action === 'create' || msg.action === 'update') {
+          if (termRef.current.trim()) runSearch(termRef.current);
+        } else if (msg.action === 'delete') {
+          setResults((prev) => (prev ? prev.filter((c) => c.id !== msg.id) : prev));
+        }
+      };
+      window.addEventListener('aw-presentation-update', handler);
+      return () => window.removeEventListener('aw-presentation-update', handler);
+    }, [fetchOwn, runSearch]);
+
+    const base = fetchOwn ? ownList : list;
+    const sorted = [...base].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    const visible = results ?? sorted;
+
+    const deletePresentation = useCallback(async (id) => {
+      await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${id}`), { method: 'DELETE' });
+    }, []);
+
+    return { loading, term, handleTermChange, results, searchLoading, visible, count: sorted.length, deletePresentation };
+  }
+
+  // ------------------------------------------------------------------
+  // 1. Nav entry (top bar) + standing WS + global open-by-id hook + hover
+  // popover (brought back 2026-10-10 to coexist with the gallery window:
+  // click opens the window, hover still peeks the old popover)
   // ------------------------------------------------------------------
   function PresentationsNavSlot() {
     const [presentations, setPresentations] = useState([]);
@@ -133,8 +250,19 @@ export function register(host) {
       return socket.retain();
     }, [openPresentation]);
 
+    const gallery = usePresentationGallery(presentations);
+    const [open, setOpen] = useState(false);
+    const closeTimer = useRef(null);
+
+    const handleEnter = useCallback(() => { clearTimeout(closeTimer.current); setOpen(true); }, []);
+    const handleLeave = useCallback(() => {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = setTimeout(() => setOpen(false), 150);
+    }, []);
+    useEffect(() => () => clearTimeout(closeTimer.current), []);
+
     return (
-      <div className="relative">
+      <div className="relative" onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
         <button
           onClick={() => window.__awOpenAppWindow?.('presentations.gallery', undefined, 'Presentations')}
           className="px-3 py-1 text-xs rounded transition-colors cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-white/5"
@@ -146,6 +274,36 @@ export function register(host) {
             </span>
           )}
         </button>
+
+        {/* Hover-only popover — the pre-2026-10-09 behaviour, restored
+            alongside (not instead of) the click-to-open gallery window
+            above, per Frederico's 2026-10-10 ask. Cards stay at the
+            original 160px here: this is a small, fixed-size quick-peek
+            box (maxWidth 720, capped at 70vh), and the window's wider
+            200px would just mean fewer visible cards in the same space —
+            the opposite of what a hover peek is for. Both this popover and
+            the window below read/write through the SAME
+            usePresentationGallery hook and PresentationGalleryPanel
+            renderer — no second copy of the fetch/search/grid logic. */}
+        {open && (
+          <div
+            className="absolute left-0 top-full mt-2 z-50 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
+            style={{ minWidth: 320, maxWidth: 720 }}
+          >
+            <PresentationGalleryPanel
+              gallery={gallery}
+              onOpen={(id, title) => { setOpen(false); openPresentation(id, title); }}
+              cardMinWidth={160}
+              showSectionLabel
+              inputWrapperClassName="mb-2"
+              inputClassName="w-full text-[11px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+              resultsWrapperClassName="overflow-y-auto"
+              resultsWrapperStyle={{ maxHeight: '70vh' }}
+              gridGapClassName="gap-2"
+              emptyPaddingClassName="px-4 py-6"
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -242,101 +400,106 @@ export function register(host) {
   }
 
   // ------------------------------------------------------------------
-  // 1b. Gallery window body — a real AW window, replacing the old nav
-  // popover (2026-10-09 card). Owns its own presentation list (GET
-  // /presentations on mount) and the debounced server-side search this app
-  // already ships at GET /presentations?q= (search_text.py) — moved here
-  // verbatim from the old popover's runSearch, seq-guard included, rather
-  // than reimplemented client-side. Live updates ride the same
-  // 'aw-presentation-update' CustomEvent the nav slot already dispatches;
-  // this window has no standing socket of its own. No titlebar actions are
-  // registered for this window (see the host.registerWindow call below) —
-  // the search bar lives in the body, which is what keeps the mobile
-  // no-titlebar-slot constraint moot here.
+  // 1b. Shared gallery renderer — search input + loading/empty/no-results
+  // states + the thumbnail grid. Used by BOTH the nav's hover popover
+  // (section 1, above) and the gallery window body (below) so there is
+  // exactly one copy of this markup, matching usePresentationGallery
+  // above being the one copy of the fetch/search logic. `cardMinWidth` is
+  // the one deliberate visual difference between the two call sites — see
+  // each one for why.
+  // ------------------------------------------------------------------
+  function PresentationGalleryPanel({
+    gallery, onOpen, cardMinWidth, narrow = false, autoFocus = true,
+    inputWrapperClassName, inputClassName,
+    resultsWrapperClassName, resultsWrapperStyle,
+    gridGapClassName = 'gap-3', emptyPaddingClassName = 'px-4 py-10',
+    showSectionLabel = false,
+  }) {
+    const { term, handleTermChange, results, searchLoading, visible, loading, deletePresentation } = gallery;
+    return (
+      <>
+        <div className={inputWrapperClassName}>
+          <input
+            type="text"
+            value={term}
+            onChange={handleTermChange}
+            placeholder="Search title or content…"
+            autoFocus={autoFocus && !narrow}
+            className={inputClassName}
+            style={narrow ? { fontSize: 16 } : undefined}
+          />
+        </div>
+        <div className={resultsWrapperClassName} style={resultsWrapperStyle}>
+          {loading ? (
+            <div className={`${emptyPaddingClassName} text-center text-xs text-[var(--color-text-muted)]`}>Loading…</div>
+          ) : visible.length === 0 && !searchLoading ? (
+            results !== null ? (
+              <div className={`${emptyPaddingClassName} text-center text-xs text-[var(--color-text-muted)]`}>
+                No results for &ldquo;{term.trim()}&rdquo;
+              </div>
+            ) : (
+              <div className={`${emptyPaddingClassName} text-center text-xs text-[var(--color-text-muted)] italic`}>
+                No presentations yet. Use <code className="bg-white/10 px-1 rounded">/aw-presentation</code> to create one.
+              </div>
+            )
+          ) : (
+            <>
+              {showSectionLabel && !searchLoading && (
+                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
+                  Presentations · newest first
+                </div>
+              )}
+              {searchLoading && (
+                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
+                  Searching…
+                </div>
+              )}
+              <div
+                className={`grid ${gridGapClassName}`}
+                style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${cardMinWidth}px, 1fr))` }}
+              >
+                {visible.map((c) => (
+                  <PresentationThumbnail
+                    key={c.id}
+                    presentation={c}
+                    onClick={() => onOpen(c.id, c.title)}
+                    onDelete={() => deletePresentation(c.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // 1c. Gallery window body — a real AW window (2026-10-09 card), now
+  // coexisting with the hover popover rather than replacing it (Frederico
+  // asked for both back on 2026-10-10). Owns its own presentation list
+  // (GET /presentations on mount, via usePresentationGallery()'s fetchOwn
+  // branch) rather than sharing the nav's WS-fed state — this window isn't
+  // always mounted, so it can't piggyback on that standing subscription
+  // the way the popover does. No titlebar actions are registered for this
+  // window (see the host.registerWindow call below) — the search bar
+  // lives in the body, which is what keeps the mobile no-titlebar-slot
+  // constraint moot here.
+  //
+  // Cards here are 200px minimum (+40px over the popover's 160px, per
+  // Frederico's ask) — this window can be widened and has room to browse
+  // comfortably; the popover is a small, fixed-size quick-peek box where
+  // the extra 40px per card would cost more visible rows than it's worth.
+  // Deliberately NOT the same value as the popover.
+  // ------------------------------------------------------------------
   function PresentationsGalleryBody() {
-    const [presentations, setPresentations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [term, setTerm] = useState('');
-    const [results, setResults] = useState(null);
-    const [searchLoading, setSearchLoading] = useState(false);
-    const termRef = useRef('');
-    const searchTimer = useRef(null);
-    const searchSeq = useRef(0);
     const containerRef = useRef(null);
     const [narrow, setNarrow] = useState(false);
+    const gallery = usePresentationGallery();
 
     const openPresentation = useCallback((id, title) => {
       window.__awOpenAppWindow?.('presentations.viewer', id, title);
     }, []);
-
-    const deletePresentation = useCallback(async (id) => {
-      await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${id}`), { method: 'DELETE' });
-    }, []);
-
-    useEffect(() => {
-      (async () => {
-        try {
-          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations'));
-          const data = await r.json();
-          setPresentations(Array.isArray(data) ? data : []);
-        } catch {
-          setPresentations([]);
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }, []);
-
-    const runSearch = useCallback((q) => {
-      clearTimeout(searchTimer.current);
-      const trimmed = q.trim();
-      if (!trimmed) {
-        setResults(null);
-        setSearchLoading(false);
-        return;
-      }
-      setSearchLoading(true);
-      searchTimer.current = setTimeout(async () => {
-        const seq = ++searchSeq.current;
-        try {
-          const r = await host.sdk.api.fetch(host.app.apiUrl('/presentations?q=' + encodeURIComponent(trimmed)));
-          const data = await r.json();
-          // Same stale-response guard as the old popover: only the
-          // latest-fired request may still apply.
-          if (seq === searchSeq.current) { setResults(Array.isArray(data) ? data : []); setSearchLoading(false); }
-        } catch {
-          if (seq === searchSeq.current) { setResults([]); setSearchLoading(false); }
-        }
-      }, 200);
-    }, []);
-
-    useEffect(() => () => clearTimeout(searchTimer.current), []);
-
-    const handleTermChange = useCallback((e) => {
-      const value = e.target.value;
-      termRef.current = value;
-      setTerm(value);
-      runSearch(value);
-    }, [runSearch]);
-
-    useEffect(() => {
-      const handler = (e) => {
-        const msg = e.detail;
-        if (!msg || msg.type !== 'presentation_update') return;
-        if (msg.action === 'create') {
-          setPresentations((prev) => [...prev.filter((c) => c.id !== msg.presentation.id), msg.presentation]);
-          if (termRef.current.trim()) runSearch(termRef.current);
-        } else if (msg.action === 'update') {
-          setPresentations((prev) => prev.map((c) => (c.id === msg.presentation.id ? msg.presentation : c)));
-          if (termRef.current.trim()) runSearch(termRef.current);
-        } else if (msg.action === 'delete') {
-          setPresentations((prev) => prev.filter((c) => c.id !== msg.id));
-          setResults((prev) => (prev ? prev.filter((c) => c.id !== msg.id) : prev));
-        }
-      };
-      window.addEventListener('aw-presentation-update', handler);
-      return () => window.removeEventListener('aw-presentation-update', handler);
-    }, [runSearch]);
 
     // Same ResizeObserver pattern as PresentationThumbnail/PresentationWindowBody.
     // NARROW_WIDTH is defined further down in this file but already in scope
@@ -354,60 +517,17 @@ export function register(host) {
       return () => ro.disconnect();
     }, []);
 
-    const sorted = [...presentations].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-    // null `results` (no active search) falls back to the full REST/WS-fed
-    // list; a non-empty term overlays the latest server-side search response.
-    const visible = results ?? sorted;
-
     return (
       <div ref={containerRef} className="flex flex-col h-full bg-[var(--color-bg-secondary)]">
-        <div className="p-3 border-b border-[var(--color-border)]">
-          <input
-            type="text"
-            value={term}
-            onChange={handleTermChange}
-            placeholder="Search title or content…"
-            autoFocus={!narrow}
-            className="w-full text-[12px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-2 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
-            style={narrow ? { fontSize: 16 } : undefined}
-          />
-        </div>
-        <div className="flex-1 overflow-y-auto p-3">
-          {loading ? (
-            <div className="px-4 py-10 text-center text-xs text-[var(--color-text-muted)]">Loading…</div>
-          ) : visible.length === 0 && !searchLoading ? (
-            results !== null ? (
-              <div className="px-4 py-10 text-center text-xs text-[var(--color-text-muted)]">
-                No results for &ldquo;{term.trim()}&rdquo;
-              </div>
-            ) : (
-              <div className="px-4 py-10 text-center text-xs text-[var(--color-text-muted)] italic">
-                No presentations yet. Use <code className="bg-white/10 px-1 rounded">/aw-presentation</code> to create one.
-              </div>
-            )
-          ) : (
-            <>
-              {searchLoading && (
-                <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] mb-2 px-1">
-                  Searching…
-                </div>
-              )}
-              <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}
-              >
-                {visible.map((c) => (
-                  <PresentationThumbnail
-                    key={c.id}
-                    presentation={c}
-                    onClick={() => openPresentation(c.id, c.title)}
-                    onDelete={() => deletePresentation(c.id)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <PresentationGalleryPanel
+          gallery={gallery}
+          onOpen={openPresentation}
+          cardMinWidth={200}
+          narrow={narrow}
+          inputWrapperClassName="p-3 border-b border-[var(--color-border)]"
+          inputClassName="w-full text-[12px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2.5 py-2 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
+          resultsWrapperClassName="flex-1 overflow-y-auto p-3"
+        />
       </div>
     );
   }
