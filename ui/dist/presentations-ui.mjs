@@ -88,7 +88,7 @@ function Be(e, t) {
     return `${n}: ${r}${a ? " !important" : ""};`;
   }).join(" ");
 }
-function je(e, t, n, r) {
+function Ie(e, t, n, r) {
   const a = `.${e}:${t}`, o = n.cssText ? Ve(n) : Be(n, r);
   return document.createTextNode(`${a}{${o}}`);
 }
@@ -103,9 +103,9 @@ function he(e, t, n, r) {
     return;
   }
   const l = document.createElement("style");
-  l.appendChild(je(i, n, a, r)), t.appendChild(l);
+  l.appendChild(Ie(i, n, a, r)), t.appendChild(l);
 }
-function Ie(e, t, n) {
+function je(e, t, n) {
   he(e, t, ":before", n), he(e, t, ":after", n);
 }
 const ge = "application/font-woff", xe = "image/jpeg", Ge = {
@@ -231,7 +231,7 @@ function ot(e, t) {
   }
 }
 function it(e, t, n) {
-  return U(t, Element) && (nt(e, t, n), Ie(e, t, n), at(e, t), ot(e, t)), t;
+  return U(t, Element) && (nt(e, t, n), je(e, t, n), at(e, t), ot(e, t)), t;
 }
 async function lt(e, t) {
   const n = e.querySelectorAll ? e.querySelectorAll("use") : [];
@@ -916,22 +916,22 @@ function Pt(e) {
       L || R((f == null ? void 0 : f.title) || "");
     }, [f == null ? void 0 : f.title, L]);
     const T = n(null), h = n(null), [d, N] = t(null), X = r((W) => {
-      var I;
-      const j = (I = W.current) == null ? void 0 : I.getBoundingClientRect();
-      j && N({ top: j.bottom + 6, right: window.innerWidth - j.right });
+      var j;
+      const I = (j = W.current) == null ? void 0 : j.getBoundingClientRect();
+      I && N({ top: I.bottom + 6, right: window.innerWidth - I.right });
     }, []), ue = r(async () => {
       await _(A) && u(!1);
     }, [_, A]);
     return a(() => {
       if (!L && !q && !y) return;
-      const W = (I) => {
+      const W = (j) => {
         var de, fe, pe, me;
-        (de = T.current) != null && de.contains(I.target) || (fe = h.current) != null && fe.contains(I.target) || (me = (pe = I.target).closest) != null && me.call(pe, "[data-pres-popover]") || (u(!1), J(!1), O(null), k(null));
-      }, j = (I) => {
-        I.key === "Escape" && (u(!1), J(!1), O(null), k(null));
+        (de = T.current) != null && de.contains(j.target) || (fe = h.current) != null && fe.contains(j.target) || (me = (pe = j.target).closest) != null && me.call(pe, "[data-pres-popover]") || (u(!1), J(!1), O(null), k(null));
+      }, I = (j) => {
+        j.key === "Escape" && (u(!1), J(!1), O(null), k(null));
       };
-      return document.addEventListener("mousedown", W), document.addEventListener("keydown", j), () => {
-        document.removeEventListener("mousedown", W), document.removeEventListener("keydown", j);
+      return document.addEventListener("mousedown", W), document.addEventListener("keydown", I), () => {
+        document.removeEventListener("mousedown", W), document.removeEventListener("keydown", I);
       };
     }, [L, q, y, O, k]), /* @__PURE__ */ e.h(e.React.Fragment, null, /* @__PURE__ */ e.h(
       "button",
@@ -985,8 +985,8 @@ function Pt(e) {
         "div",
         {
           "data-pres-popover": !0,
-          className: "fixed z-[1000] bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3",
-          style: { top: d.top, right: d.right, minWidth: 260 }
+          className: "fixed bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3",
+          style: { top: d.top, right: d.right, minWidth: 260, zIndex: 1e3 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] mb-2" }, "Rename presentation"),
         /* @__PURE__ */ e.h(
@@ -1018,15 +1018,15 @@ function Pt(e) {
         "div",
         {
           "data-pres-popover": !0,
-          className: "fixed z-[1000] bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3",
-          style: { top: d.top, right: d.right, minWidth: 260 }
+          className: "fixed bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3",
+          style: { top: d.top, right: d.right, minWidth: 260, zIndex: 1e3 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-text-primary)] mb-2" }, "Share presentation"),
-        s ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : E ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: E }, E), /* @__PURE__ */ e.h("button", { onClick: p, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, m ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => $(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: W, value: j }) => /* @__PURE__ */ e.h(
+        s ? /* @__PURE__ */ e.h("div", { className: "text-[11px] text-[var(--color-text-muted)] py-2 text-center" }, "Generating link…") : E ? /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-2" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)]" }, "Link generated:"), /* @__PURE__ */ e.h("div", { className: "flex items-center gap-2 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1.5" }, /* @__PURE__ */ e.h("span", { className: "text-[10px] font-mono text-[var(--color-text-primary)] truncate flex-1", title: E }, E), /* @__PURE__ */ e.h("button", { onClick: p, className: "shrink-0 text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)]/20 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/30 transition-colors" }, m ? "✓ Copied" : "Copy")), /* @__PURE__ */ e.h("button", { onClick: () => $(null), className: "text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] text-left" }, "← Generate new link")) : /* @__PURE__ */ e.h("div", { className: "flex flex-col gap-1.5" }, /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-1" }, "Link expires after:"), [{ label: "1 hour", value: 3600 }, { label: "1 day", value: 86400 }, { label: "Never expires", value: null }].map(({ label: W, value: I }) => /* @__PURE__ */ e.h(
           "button",
           {
             key: W,
-            onClick: () => S(j),
+            onClick: () => S(I),
             className: "text-left text-[11px] px-3 py-1.5 rounded bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 transition-colors"
           },
           W
@@ -1041,8 +1041,8 @@ function Pt(e) {
         "div",
         {
           "data-pres-popover": !0,
-          className: "fixed z-[1000] bg-[var(--color-bg-secondary)] border border-[var(--color-danger)]/40 rounded-lg shadow-2xl p-3",
-          style: { top: d.top, right: d.right, minWidth: 220, maxWidth: 280 }
+          className: "fixed bg-[var(--color-bg-secondary)] border border-[var(--color-danger)]/40 rounded-lg shadow-2xl p-3",
+          style: { top: d.top, right: d.right, minWidth: 220, maxWidth: 280, zIndex: 1e3 }
         },
         /* @__PURE__ */ e.h("div", { className: "text-[11px] font-medium text-[var(--color-danger)] mb-1" }, "Export failed"),
         /* @__PURE__ */ e.h("div", { className: "text-[10px] text-[var(--color-text-muted)] mb-2" }, y),

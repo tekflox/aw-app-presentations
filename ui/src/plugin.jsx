@@ -885,8 +885,8 @@ export function register(host) {
         {renameOpen && anchor && host.ReactDOM.createPortal(
           <div
             data-pres-popover
-            className="fixed z-[1000] bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
-            style={{ top: anchor.top, right: anchor.right, minWidth: 260 }}
+            className="fixed bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
+            style={{ top: anchor.top, right: anchor.right, minWidth: 260, zIndex: 1000 }}
           >
             <div className="text-[11px] font-medium text-[var(--color-text-primary)] mb-2">Rename presentation</div>
             <input
@@ -918,8 +918,8 @@ export function register(host) {
         {shareOpen && anchor && host.ReactDOM.createPortal(
           <div
             data-pres-popover
-            className="fixed z-[1000] bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
-            style={{ top: anchor.top, right: anchor.right, minWidth: 260 }}
+            className="fixed bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg shadow-2xl p-3"
+            style={{ top: anchor.top, right: anchor.right, minWidth: 260, zIndex: 1000 }}
           >
             <div className="text-[11px] font-medium text-[var(--color-text-primary)] mb-2">Share presentation</div>
             {shareLoading ? (
@@ -959,8 +959,8 @@ export function register(host) {
           // reason reads as "broken, does nothing" — this makes it tappable.
           <div
             data-pres-popover
-            className="fixed z-[1000] bg-[var(--color-bg-secondary)] border border-[var(--color-danger)]/40 rounded-lg shadow-2xl p-3"
-            style={{ top: anchor.top, right: anchor.right, minWidth: 220, maxWidth: 280 }}
+            className="fixed bg-[var(--color-bg-secondary)] border border-[var(--color-danger)]/40 rounded-lg shadow-2xl p-3"
+            style={{ top: anchor.top, right: anchor.right, minWidth: 220, maxWidth: 280, zIndex: 1000 }}
           >
             <div className="text-[11px] font-medium text-[var(--color-danger)] mb-1">Export failed</div>
             <div className="text-[10px] text-[var(--color-text-muted)] mb-2">{exportError}</div>
