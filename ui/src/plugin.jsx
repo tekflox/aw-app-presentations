@@ -567,6 +567,7 @@ export function register(host) {
     const [shareCopied, setShareCopied] = useState(false);
     const [exportLoading, setExportLoading] = useState(false);
     const [exportError, setExportError] = useState(null);
+    const [renameError, setRenameError] = useState(null);
 
     const load = useCallback(async () => {
       if (!presentationId) return;
@@ -663,16 +664,33 @@ export function register(host) {
       window.__awOpenAppWindow?.('presentations.viewer', presentationId, title);
     }, [onTitleChange, presentationId]);
 
+    // Returns true on success, false on failure, so a caller knows whether
+    // it's safe to close its popover/sheet. The backend returns HTTP 200
+    // with success:false (never a 4xx/5xx) when the row is gone — e.g. the
+    // presentation was deleted out from under an open window — so res.ok
+    // alone would have let that failure through as a silent no-op "rename".
     const commitRename = useCallback(async (rawTitle) => {
       const title = (rawTitle || '').trim();
-      if (!title || title === presentation?.title) return;
-      await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${presentationId}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
-      });
-      setPresentation((prev) => (prev ? { ...prev, title } : prev));
-      applyTitle(title);
+      if (!title || title === presentation?.title) return true;
+      setRenameError(null);
+      try {
+        const res = await host.sdk.api.fetch(host.app.apiUrl(`/presentations/${presentationId}`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || data?.success === false) {
+          throw new Error(data?.error || `rename failed (${res.status})`);
+        }
+        setPresentation((prev) => (prev ? { ...prev, title } : prev));
+        applyTitle(title);
+        return true;
+      } catch (err) {
+        console.error('Rename failed:', err);
+        setRenameError(err.message || 'Rename failed');
+        return false;
+      }
     }, [presentation?.title, presentationId, applyTitle]);
 
     const handleCreateShare = useCallback(async (expiresIn) => {
@@ -722,7 +740,7 @@ export function register(host) {
       presentation, htmlUrl,
       shareLink, setShareLink, shareLoading, shareCopied, handleCreateShare, handleCopy,
       exportLoading, exportError, setExportError, handleExport,
-      commitRename, handleDelete, popOut,
+      commitRename, renameError, setRenameError, handleDelete, popOut,
     };
   }
 
@@ -732,7 +750,7 @@ export function register(host) {
       presentation, htmlUrl,
       shareLink, setShareLink, shareLoading, shareCopied, handleCreateShare, handleCopy,
       exportLoading, exportError, setExportError, handleExport,
-      commitRename, handleDelete, popOut,
+      commitRename, renameError, setRenameError, handleDelete, popOut,
     } = usePresentationActions(presentationId, windowKey, { onClose, onTitleChange });
 
     const [renameOpen, setRenameOpen] = useState(false);
@@ -757,9 +775,9 @@ export function register(host) {
       if (r) setAnchor({ top: r.bottom + 6, right: window.innerWidth - r.right });
     }, []);
 
-    const submitRename = useCallback(() => {
-      setRenameOpen(false);
-      commitRename(editTitle);
+    const submitRename = useCallback(async () => {
+      const ok = await commitRename(editTitle);
+      if (ok) setRenameOpen(false);
     }, [commitRename, editTitle]);
 
     // Dismiss any open popover on outside click / Escape — portalled content
@@ -773,12 +791,14 @@ export function register(host) {
         setRenameOpen(false);
         setShareOpen(false);
         setExportError(null);
+        setRenameError(null);
       };
       const onKey = (e) => {
         if (e.key !== 'Escape') return;
         setRenameOpen(false);
         setShareOpen(false);
         setExportError(null);
+        setRenameError(null);
       };
       document.addEventListener('mousedown', onDown);
       document.addEventListener('keydown', onKey);
@@ -786,7 +806,7 @@ export function register(host) {
         document.removeEventListener('mousedown', onDown);
         document.removeEventListener('keydown', onKey);
       };
-    }, [renameOpen, shareOpen, exportError, setExportError]);
+    }, [renameOpen, shareOpen, exportError, setExportError, setRenameError]);
 
     // No Maximize button here on purpose — BasicWindow's header already has
     // one, and duplicating it was half the reason this app drew a second bar.
@@ -801,6 +821,7 @@ export function register(host) {
             setRenameOpen((open) => {
               if (open) return false;
               setEditTitle(presentation?.title || '');
+              setRenameError(null);
               anchorTo(renameBtnRef);
               return true;
             });
@@ -875,10 +896,13 @@ export function register(host) {
               onChange={(e) => setEditTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submitRename();
-                if (e.key === 'Escape') { setRenameOpen(false); setEditTitle(presentation?.title || ''); }
+                if (e.key === 'Escape') { setRenameOpen(false); setEditTitle(presentation?.title || ''); setRenameError(null); }
               }}
               className="w-full text-[11px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded px-2 py-1 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)]"
             />
+            {renameError && (
+              <div className="text-[10px] text-[var(--color-danger)] mt-1.5">{renameError}</div>
+            )}
             <div className="flex justify-end mt-2">
               <button
                 onClick={submitRename}
@@ -967,10 +991,15 @@ export function register(host) {
     const {
       presentation, shareLink, setShareLink, shareLoading, shareCopied,
       handleCreateShare, handleCopy, exportLoading, exportError, setExportError,
-      handleExport, commitRename, handleDelete, popOut,
+      handleExport, commitRename, renameError, setRenameError, handleDelete, popOut,
     } = actions;
     const [view, setView] = useState('menu');
     const [title, setTitle] = useState(presentation?.title || '');
+
+    const submitSheetRename = useCallback(async () => {
+      const ok = await commitRename(title);
+      if (ok) onDismiss();
+    }, [commitRename, title, onDismiss]);
 
     const row = {
       display: 'flex', alignItems: 'center', gap: 12, width: '100%',
@@ -1003,7 +1032,7 @@ export function register(host) {
               >
                 {exportLoading ? 'Exporting…' : 'Export as PNG'}
               </button>
-              <button style={row} onClick={() => { setTitle(presentation?.title || ''); setView('rename'); }}>Rename</button>
+              <button style={row} onClick={() => { setTitle(presentation?.title || ''); setRenameError(null); setView('rename'); }}>Rename</button>
               <button style={row} onClick={() => { popOut({ asTab: true }); onDismiss(); }}>Open in new tab</button>
               <button
                 style={{ ...row, color: 'var(--color-danger)' }}
@@ -1064,7 +1093,7 @@ export function register(host) {
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { commitRename(title); onDismiss(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitSheetRename(); }}
                 style={{
                   // 16px, not smaller: iOS Safari zooms the whole page in on
                   // any focused field below that.
@@ -1073,12 +1102,15 @@ export function register(host) {
                   border: '1px solid var(--color-border)', borderRadius: 6, outline: 'none',
                 }}
               />
+              {renameError && (
+                <div style={{ fontSize: 12, color: 'var(--color-danger)', margin: '4px 0' }}>{renameError}</div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={{ ...row, color: 'var(--color-text-muted)' }} onClick={() => setView('menu')}>Cancel</button>
+                <button style={{ ...row, color: 'var(--color-text-muted)' }} onClick={() => { setRenameError(null); setView('menu'); }}>Cancel</button>
                 <button
                   style={{ ...row, color: 'var(--color-accent)', justifyContent: 'flex-end' }}
                   disabled={!title.trim()}
-                  onClick={() => { commitRename(title); onDismiss(); }}
+                  onClick={submitSheetRename}
                 >
                   Rename
                 </button>
