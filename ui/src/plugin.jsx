@@ -1169,13 +1169,21 @@ export function register(host) {
       <div ref={containerRef} className="flex flex-col bg-[var(--color-bg-secondary)] h-full">
         <div className="flex-1 relative">
           {htmlUrl && (
-            // allow-scripts only, deliberately NOT allow-same-origin: presentation
-            // HTML is agent-generated and can be hostile/compromised. Without
+            // allow-scripts + allow-popups + allow-popups-to-escape-sandbox,
+            // deliberately NOT allow-same-origin: presentation HTML is
+            // agent-generated and can be hostile/compromised. Without
             // allow-same-origin the frame is an opaque origin — scripts run, but
             // can't read this API host's cookies/localStorage or ride an
             // authenticated same-origin request. A relative fetch inside a
             // presentation would need to resolve via an absolute URL instead.
-            <iframe ref={iframeRef} src={htmlUrl} sandbox="allow-scripts" className="absolute inset-0 w-full h-full bg-white border-0" title="Presentation" />
+            // allow-popups lets target="_blank" links / window.open() inside the
+            // presentation open a new tab instead of silently failing; without
+            // allow-popups-to-escape-sandbox that new tab would inherit this
+            // frame's sandbox restrictions and load as an opaque-origin page
+            // itself, breaking any destination that needs its own cookies/session
+            // — the escape flag only frees the new tab, it does not loosen this
+            // iframe's own restrictions.
+            <iframe ref={iframeRef} src={htmlUrl} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" className="absolute inset-0 w-full h-full bg-white border-0" title="Presentation" />
           )}
           {narrow && !sheetOpen && (
             <button
