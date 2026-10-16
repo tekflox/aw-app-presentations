@@ -345,7 +345,7 @@ export function register(host) {
         >
           <iframe
             src={host.app.absoluteApiUrl(`/presentations/${presentation.id}/html`)}
-            sandbox="allow-same-origin"
+            sandbox="allow-scripts"
             tabIndex={-1}
             aria-hidden
             style={{
