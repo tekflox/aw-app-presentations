@@ -641,7 +641,7 @@ function Pt(e) {
           "iframe",
           {
             src: e.app.absoluteApiUrl(`/presentations/${c.id}/html`),
-            sandbox: "allow-same-origin",
+            sandbox: "allow-scripts",
             tabIndex: -1,
             "aria-hidden": !0,
             style: {
