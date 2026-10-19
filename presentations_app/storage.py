@@ -26,6 +26,36 @@ _TABLE = "app__presentations__records"
 _SHARE_TABLE = "app__presentations__shares"
 _RELAY_TOPIC = "presentations:update"
 
+
+class _CtxBroadcastAdapter:
+    """Adapts ``ctx.state.broadcast`` (``state:own``) to the
+    ``RedisBroadcaster``-shaped interface ``PresentationStore`` already
+    speaks — ``start_relay(handler)`` / ``publish(topic, payload)`` /
+    ``stop()`` — so the production path can move off a direct
+    ``src.libs.redis_coord`` import without touching the ``broadcaster=``
+    override ``tests/test_cross_worker_broadcast_gap.py`` injects for its
+    real-Redis proof."""
+
+    #: Bare local name ``ctx.state.broadcast`` namespaces under this app's
+    #: own id. Unlike ``_RELAY_TOPIC`` (colon-bearing, meant for a raw
+    #: PSUBSCRIBE-everything relay that filters itself) this never needs to
+    #: match a wider pattern, so it's just the one topic this app ever uses.
+    _TOPIC = "update"
+
+    def __init__(self, ctx) -> None:
+        self._ctx = ctx
+
+    async def start_relay(self, handler) -> None:
+        async def _dispatch(payload: dict) -> None:
+            await handler(_RELAY_TOPIC, payload)
+        await self._ctx.state.broadcast.subscribe(self._TOPIC, _dispatch)
+
+    async def publish(self, topic: str, payload: dict) -> None:
+        await self._ctx.state.broadcast.publish(self._TOPIC, payload)
+
+    async def stop(self) -> None:
+        await self._ctx.state.broadcast.aclose()
+
 _TABLE_DDL = """
     id TEXT PRIMARY KEY,
     title TEXT,
@@ -113,11 +143,15 @@ class PresentationStore:
     byte-for-byte compatible with the monolith's ``/api/presentations``.
     """
 
-    def __init__(self, ctx):
+    def __init__(self, ctx, *, broadcaster=None):
         self._ctx = ctx
         self._listeners: set = set()
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._broadcaster = None
+        # Injectable purely so the cross-worker test can stand two of these
+        # up over a real Redis without going through ctx — see
+        # tests/test_cross_worker_broadcast_gap.py. Production passes
+        # neither and gets _CtxBroadcastAdapter wrapping ctx.state.broadcast.
+        self._broadcaster = broadcaster
         self._relay_up = False
         ctx.db.create(_TABLE, _TABLE_DDL)
         ctx.db.create(_SHARE_TABLE, _SHARE_TABLE_DDL)
@@ -137,25 +171,25 @@ class PresentationStore:
         asyncio.ensure_future(self._start_relay())
 
     async def _start_relay(self) -> None:
-        """Start the cross-worker Redis relay. Never raises: at
-        ``AW_WORKSPACE_WORKERS=10`` (production) a browser's WS and a
-        recording daemon's HTTP upsert land on independently-chosen
-        workers, so without this relay ``_broadcast`` only ever reached
-        whichever worker happened to hold the open WS (~1/10 of the time).
-        With no reachable Redis — or no aw-workspace ``src`` package on
-        ``sys.path`` (this app also ships/tests standalone) — broadcasts
-        degrade to this worker's own listeners only, the same posture as
-        every other relay in this codebase (see
-        ``apps/devctl/devctl_app/relay.py``'s ``start_relay``)."""
+        """Start the cross-worker relay via ``ctx.state.broadcast``
+        (``state:own``). Never raises: at ``AW_WORKSPACE_WORKERS=10``
+        (production) a browser's WS and a recording daemon's HTTP upsert
+        land on independently-chosen workers, so without this relay
+        ``_broadcast`` only ever reached whichever worker happened to hold
+        the open WS (~1/10 of the time). With ``state:own`` not granted, or
+        a ``ctx`` double with no ``.state`` at all (this app also ships
+        tests against a bare in-memory ``FakeCtx``) — broadcasts degrade to
+        this worker's own listeners only, the same posture as every other
+        relay in this codebase (see ``apps/devctl/devctl_app/relay.py``'s
+        ``start_relay``)."""
         try:
-            from src.libs.redis_coord import RedisBroadcaster
-
-            self._broadcaster = RedisBroadcaster()
+            if self._broadcaster is None:
+                self._broadcaster = _CtxBroadcastAdapter(self._ctx)
             await self._broadcaster.start_relay(self._on_relay_message)
             self._relay_up = True
         except Exception:
             logger.warning(
-                "presentations: could not start the cross-worker Redis relay — "
+                "presentations: could not start the cross-worker relay — "
                 "live updates will only reach this worker's own listeners until "
                 "restarted (harmless at AW_WORKSPACE_WORKERS=1)", exc_info=True)
 

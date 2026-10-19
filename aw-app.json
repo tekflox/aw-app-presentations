@@ -22,6 +22,7 @@
   "permissions": [
     "routes:register",
     "db:own-tables",
+    "state:own",
     "ui:code",
     "ui:slots:core.nav"
   ],

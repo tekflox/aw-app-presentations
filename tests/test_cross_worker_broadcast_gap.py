@@ -33,6 +33,7 @@ there, same posture as ``apps/devctl/tests/test_relay_multiworker.py``.
 """
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
 import sys
@@ -101,6 +102,35 @@ class SharedCtx:
         self.db = db
 
 
+class SharedCtxWithState(SharedCtx):
+    """``SharedCtx`` plus a real, granted ``ctx.state`` — same minimal
+    ``AppContext`` construction ``src/tests/integration/apps/
+    test_state_facade_multiworker.py`` uses to prove ``ctx.state`` itself
+    cross-worker. Each instance gets its OWN ``AppContext`` (so its own
+    ``StateFacade``/broadcaster), sharing nothing in Python with the other
+    worker — only the real Redis both resolve to."""
+
+    def __init__(self, db):
+        super().__init__(db)
+        from src.apps.base import AppContext
+
+        class _Journal:
+            def record(self, *a, **kw):
+                pass
+
+        class _Runtime:
+            journal = _Journal()
+
+        self._app_ctx = AppContext(
+            runtime=_Runtime(), app_id="presentations", version="1.0.0",
+            granted_permissions=["state:own"], config={},
+            package_dir="/tmp/presentations")
+
+    @property
+    def state(self):
+        return self._app_ctx.state
+
+
 @contextlib.contextmanager
 def _worker(db, tmp_path):
     """Yields ``(store, client)`` with the sub-app's ASGI lifespan actually
@@ -109,8 +139,17 @@ def _worker(db, tmp_path):
     relying_on_asgi_startup`` in ``test_storage_and_routes.py``), which is
     what calls ``store.set_loop()`` and, through it, starts the relay this
     test exercises. A bare ``TestClient(app)`` with no ``with`` never binds
-    the loop at all, which would make this test pass for the wrong reason."""
-    store = PresentationStore(SharedCtx(db))
+    the loop at all, which would make this test pass for the wrong reason.
+
+    Passes a real ``RedisBroadcaster`` explicitly rather than relying on
+    ``PresentationStore``'s own default (``ctx.state.broadcast``, which
+    needs a granted ``state:own`` capability ``SharedCtx`` doesn't carry) —
+    this test's job is to prove the underlying Redis primitive the facade
+    wraps still delivers cross-worker, same posture as
+    ``apps/devctl/tests/test_relay_multiworker.py``."""
+    from src.libs.redis_coord import RedisBroadcaster
+
+    store = PresentationStore(SharedCtx(db), broadcaster=RedisBroadcaster(_redis_url()))
     app = routes_mod.build_app(store, str(tmp_path))
     with TestClient(app) as client:
         yield store, client
@@ -185,3 +224,60 @@ def test_create_on_one_worker_is_broadcast_to_another(tmp_path):
         assert msg["type"] == "presentation_update"
         assert msg["action"] == "create"
         assert msg["presentation"]["id"] == "recording-demo"
+
+
+def test_create_publishes_under_ctx_states_namespaced_broadcast_topic(tmp_path):
+    """Proves the PRODUCTION path actually goes through ``ctx.state.broadcast``
+    rather than merely degrading to local-only without error (the WS-level
+    regression test above can't tell those apart in THIS checkout, because
+    ``src.libs.redis_coord`` is reachable here either way — the old direct
+    import still works against a real Redis, just at the wrong layer).
+
+    ``ctx.state.broadcast`` namespaces every topic under ``app:<app_id>:``
+    (``src/apps/state_facade.py::broadcast_topic``) — a real, observable
+    difference from the old ad hoc ``_RELAY_TOPIC = "presentations:update"``
+    channel. Subscribe directly to the NEW channel with a raw
+    ``RedisBroadcaster`` (PSUBSCRIBEs every topic, like the real cross-worker
+    relay) and prove a ``create()`` reaches it. Fails against the
+    pre-migration module, which publishes to the OLD un-namespaced
+    ``presentations:update`` topic instead — nothing ever arrives on
+    ``app:presentations:update``, and this times out.
+    """
+    from src.libs.redis_coord import RedisBroadcaster
+
+    os.environ["AW_WORKSPACE"] = f"presentations-ctxstate-topic-test-{time.time()}"
+    db = FakeDb()
+
+    async def scenario():
+        received: list[tuple[str, dict]] = []
+
+        async def _collect(topic, payload):
+            received.append((topic, payload))
+
+        probe = RedisBroadcaster(_redis_url())
+        await probe.start_relay(_collect)
+        await asyncio.sleep(0.3)  # let the PSUBSCRIBE land
+
+        store = PresentationStore(SharedCtxWithState(db))
+        store.set_loop(asyncio.get_event_loop())
+
+        deadline = time.monotonic() + 5.0
+        while not store._relay_up and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        assert store._relay_up, "ctx.state relay never came up"
+
+        store.create(title="T", html="<p>x</p>", presentation_id="ctxstate-topic-demo")
+
+        deadline = time.monotonic() + 5.0
+        while (time.monotonic() < deadline
+               and not any(t == "app:presentations:update" for t, _ in received)):
+            await asyncio.sleep(0.05)
+
+        await probe.stop()
+        return received
+
+    received = asyncio.run(scenario())
+    assert any(t == "app:presentations:update" for t, _ in received), (
+        "no message published under ctx.state's namespaced broadcast topic "
+        "(app:presentations:update) — storage.py is not actually using "
+        "ctx.state.broadcast for its relay")
